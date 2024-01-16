@@ -121,6 +121,8 @@ def execute_rome(
         )
         print("Right vector shape:", right_vector.shape)
 
+        right_vector = right_vector.to(torch.float16)
+
         with torch.no_grad():
             # Determine correct transposition of delta matrix
             weight_name = f"{hparams.rewrite_module_tmp.format(layer)}.weight"
