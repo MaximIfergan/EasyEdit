@@ -21,6 +21,7 @@ from ..evaluate import compute_edit_quality, compute_icl_edit_quality
 from ..util import nethook
 from ..util.hparams import HyperParams
 from ..util.alg_dict import *
+import logging.config
 
 logging.basicConfig(format = '%(asctime)s - %(levelname)s - %(name)s -   %(message)s',
                     datefmt = '%m/%d/%Y %H:%M:%S',
@@ -28,6 +29,8 @@ logging.basicConfig(format = '%(asctime)s - %(levelname)s - %(name)s -   %(messa
 
 LOG = logging.getLogger(__name__)
 os.environ['CUDA_LAUNCH_BLOCKING'] = "1"
+
+logging.config.dictConfig({'disable_existing_loggers': True})
 
 def make_logs():
 
