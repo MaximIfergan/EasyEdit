@@ -30,7 +30,7 @@ logging.basicConfig(format = '%(asctime)s - %(levelname)s - %(name)s -   %(messa
 LOG = logging.getLogger(__name__)
 os.environ['CUDA_LAUNCH_BLOCKING'] = "1"
 
-logging.config.dictConfig({'disable_existing_loggers': True})
+logging.config.dictConfig({'version': 1, 'disable_existing_loggers': True})
 
 def make_logs():
 
