@@ -51,7 +51,7 @@ def apply_rome_to_model(
 
             w[...] += upd_matrix
 
-        print(f"New weights successfully inserted into {list(deltas.keys())}")
+        # print(f"New weights successfully inserted into {list(deltas.keys())}")
 
     if not keep_original_weight:
         weights_copy = {}
@@ -82,10 +82,10 @@ def execute_rome(
 
         request['prompt'] = request['prompt'].replace(request['subject'], '{}')
 
-    print(
-        f"Executing ROME algorithm for the update: "
-        f"[{request['prompt'].format(request['subject'])}] -> [{request['target_new']}]"
-    )
+    # print(
+    #     f"Executing ROME algorithm for the update: "
+    #     f"[{request['prompt'].format(request['subject'])}] -> [{request['target_new']}]"
+    # )
 
     # Retrieve weights that user desires to change
     weights = {
@@ -109,7 +109,7 @@ def execute_rome(
             layer,
             get_context_templates(model, tok, hparams.context_template_length_params),
         )
-        print("Left vector shape:", left_vector.shape)
+        # print("Left vector shape:", left_vector.shape)
         right_vector: torch.Tensor = compute_v(
             model,
             tok,
@@ -119,7 +119,7 @@ def execute_rome(
             left_vector,
             get_context_templates(model, tok, hparams.context_template_length_params),
         )
-        print("Right vector shape:", right_vector.shape)
+        # print("Right vector shape:", right_vector.shape)
 
         right_vector = right_vector.to(torch.float16)
 
@@ -141,7 +141,7 @@ def execute_rome(
         for k, v in weights.items():
             v[...] = weights_copy[k]
 
-    print(f"Deltas successfully computed for {list(weights.keys())}")
+    # print(f"Deltas successfully computed for {list(weights.keys())}")
 
     return deltas
 
@@ -184,6 +184,6 @@ def get_context_templates(model, tok, length_params):
             )
         ]
 
-        print(f"Cached context templates {CONTEXT_TEMPLATES_CACHE}")
+        # print(f"Cached context templates {CONTEXT_TEMPLATES_CACHE}")
 
     return CONTEXT_TEMPLATES_CACHE

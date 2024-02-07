@@ -25,7 +25,7 @@ def compute_v(
     Runs a simple optimization procedure.
     """
 
-    print("Computing right vector (v)")
+    # print("Computing right vector (v)")
 
     # Tokenize target into list of int token IDs
     target_ids = tok(request["target_new"], return_tensors="pt").to(f"cuda:{hparams.device}")[
@@ -69,9 +69,9 @@ def compute_v(
 
     # Finalize rewrite and loss layers
     loss_layer = max(hparams.v_loss_layer, layer)
-    print(f"Rewrite layer is {layer}")
-    print(f"Tying optimization objective to {loss_layer}")
-
+    # print(f"Rewrite layer is {layer}")
+    # print(f"Tying optimization objective to {loss_layer}")
+    #
     # Set up an optimization over a latent vector that, when output at the
     # rewrite layer, i.e. hypothesized fact lookup location, will induce the
     # target token to be predicted at the final layer.
@@ -87,7 +87,7 @@ def compute_v(
         if cur_layer == hparams.mlp_module_tmp.format(layer):
             # Store initial value of the vector of interest
             if target_init is None:
-                print("Recording initial value of v*")
+                # print("Recording initial value of v*")
                 # Initial value is recorded for the clean sentence
                 target_init = cur_out[0, lookup_idxs[0]].detach().clone()
                 
@@ -153,11 +153,11 @@ def compute_v(
         )
         # weight_decay = hparams.v_weight_decay * torch.norm(delta) ** 2
         loss = nll_loss + kl_loss + weight_decay
-        print(
-            f"loss {np.round(loss.item(), 3)} = {np.round(nll_loss.item(), 3)} + {np.round(kl_loss.item(), 3)} + {np.round(weight_decay.item(), 3)} "
-            f"avg prob of [{request['target_new']}] "
-            f"{torch.exp(-nll_loss_each).mean().item()}"
-        )
+        # print(
+        #     f"loss {np.round(loss.item(), 3)} = {np.round(nll_loss.item(), 3)} + {np.round(kl_loss.item(), 3)} + {np.round(weight_decay.item(), 3)} "
+        #     f"avg prob of [{request['target_new']}] "
+        #     f"{torch.exp(-nll_loss_each).mean().item()}"
+        # )
         if loss < 5e-2:
             break
 
@@ -190,12 +190,12 @@ def compute_v(
 
     # Solving the linear system to compute the right vector
     right_vector = (target - cur_output) / torch.dot(cur_input, left_vector)
-    print(f"Delta norm: {(target - cur_output).norm().item()}")
-    print(
-        f"Change in target norm: {target_init.norm().item()} to {target.norm().item()} => {(target.norm() - target_init.norm()).item()}"
-    )
-    print(f"Division Factor: {torch.dot(cur_input, left_vector).item()}")
-    print(f"Right vector norm: {right_vector.norm()}")
+    # print(f"Delta norm: {(target - cur_output).norm().item()}")
+    # print(
+    #     f"Change in target norm: {target_init.norm().item()} to {target.norm().item()} => {(target.norm() - target_init.norm()).item()}"
+    # )
+    # print(f"Division Factor: {torch.dot(cur_input, left_vector).item()}")
+    # print(f"Right vector norm: {right_vector.norm()}")
 
     return right_vector
 
