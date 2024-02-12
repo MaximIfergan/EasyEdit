@@ -5,7 +5,7 @@ device: 0
 layers: [4]
 fact_token: "subject_last"
 v_num_grad_steps: 25
-v_lr: 0.5
+v_lr: 0.15
 v_loss_layer: 29
 v_weight_decay: 0.05
 clamp_norm_factor: 4
