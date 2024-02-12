@@ -1,3 +1,4 @@
+import logging
 from copy import deepcopy
 from typing import Dict, List, Tuple
 
@@ -167,6 +168,7 @@ def get_context_templates(model, tok, length_params):
     global CONTEXT_TEMPLATES_CACHE
 
     if CONTEXT_TEMPLATES_CACHE is None:
+        logging.info("Get_context_templates call!")
         CONTEXT_TEMPLATES_CACHE = ["{}"] + [
             x.replace("{", "").replace("}", "") + ". {}"
             for x in sum(
