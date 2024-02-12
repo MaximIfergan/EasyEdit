@@ -168,7 +168,7 @@ def get_context_templates(model, tok, length_params):
     global CONTEXT_TEMPLATES_CACHE
 
     if CONTEXT_TEMPLATES_CACHE is None:
-        logging.info("Get_context_templates call!")
+        logging.info("\nGet_context_templates call!\n")
         CONTEXT_TEMPLATES_CACHE = ["{}"] + [
             x.replace("{", "").replace("}", "") + ". {}"
             for x in sum(

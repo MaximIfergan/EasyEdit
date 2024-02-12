@@ -281,8 +281,8 @@ class BaseEditor:
                     with torch.no_grad():
                         for k, v in weights_copy.items():
                             nethook.get_parameter(self.model, k)[...] = v.to(f"cuda:{self.hparams.device}")
-                if 'locality' in all_metrics[i]['post'].keys():
-                    pass
+                # if 'locality' in all_metrics[i]['post'].keys():
+                #     pass
                     # for locality_key in request['locality'].keys():
                     #     assert len(all_metrics[i]['post']['locality'][f'{locality_key}_output']) == \
                     #            len(all_metrics[i]['pre']['locality'][f'{locality_key}_output'])
