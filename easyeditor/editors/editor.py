@@ -89,8 +89,7 @@ class BaseEditor:
                 self.tok = AutoTokenizer.from_pretrained(self.model_name,trust_remote_code=True)
                 self.tok.pad_token_id = self.tok.eos_token_id
             elif 'qwen' in self.model_name.lower():
-                self.model = AutoModelForCausalLM.from_pretrained(self.model_name, fp32=True if hparams.alg_name == 'ROME' else False, trust_remote_code=True)
-                #  device_map='auto' if hparams.model_parallel else None
+                self.model = AutoModelForCausalLM.from_pretrained(self.model_name, fp32=True if hparams.alg_name == 'ROME' else False, trust_remote_code=True, device_map='auto' if hparams.model_parallel else None)
                 self.tok = AutoTokenizer.from_pretrained(self.model_name, eos_token='<|endoftext|>', pad_token='<|endoftext|>', unk_token='<|endoftext|>', trust_remote_code=True)
             elif 'bloom' in self.model_name.lower():
                 self.model = AutoModelForCausalLM.from_pretrained(self.model_name, low_cpu_mem_usage=True, torch_dtype=torch.float16, trust_remote_code=True)
@@ -111,8 +110,9 @@ class BaseEditor:
         # self.model.parallelize(device_map=device_map)
         if hparams.model_parallel:
             hparams.device = str(self.model.device).split(":")[1]
-        if not hparams.model_parallel and hasattr(hparams, 'device'):
-            self.model.to(f'cuda:{hparams.device}')
+
+        # if not hparams.model_parallel and hasattr(hparams, 'device'):
+        #     self.model.to(f'cuda:{hparams.device}')
 
         self.hparams = hparams
 
