@@ -121,8 +121,8 @@ def execute_rome(
             get_context_templates(model, tok, hparams.context_template_length_params),
         )
         # print("Right vector shape:", right_vector.shape)
-
-        right_vector = right_vector.to(torch.float16)
+        if 'bloom' in model.__class__.__name__.lower():
+            right_vector = right_vector.to(torch.float16)
 
         with torch.no_grad():
             # Determine correct transposition of delta matrix
