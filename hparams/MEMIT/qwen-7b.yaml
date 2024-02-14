@@ -1,5 +1,5 @@
 alg_name: "MEMIT"
-model_name: "./hugging_cache/qwen-7b"
+model_name: "Qwen/Qwen-7B"
 stats_dir: "./data/stats"
 device: 0
 layers: [4, 5, 6, 7, 8]
