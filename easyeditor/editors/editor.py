@@ -110,6 +110,7 @@ class BaseEditor:
         # self.model.parallelize(device_map=device_map)
         if hparams.model_parallel:
             hparams.device = str(self.model.device).split(":")[1]
+        torch.cuda.empty_cache()
         if not hparams.model_parallel and hasattr(hparams, 'device'):
             self.model.to(f'cuda:{hparams.device}')
 
