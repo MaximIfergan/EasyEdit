@@ -147,6 +147,7 @@ def layer_stats(
         batch_tokens = npos * 3  # Sort and divide into batches with this many tokens
     if precision is None:
         precision = "float64"
+        precision = "float32"
     dtype = getattr(torch, precision)
     size_suffix = "" if sample_size is None else f"_{sample_size}"
     if batch_tokens < npos:
