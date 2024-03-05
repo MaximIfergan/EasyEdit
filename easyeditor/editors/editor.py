@@ -7,8 +7,8 @@ import json
 import torch
 import logging
 import numpy as np
-
-
+import random
+from ..models.melo.melo import LORA
 from transformers import AutoTokenizer, AutoModelForCausalLM, AutoModel
 from transformers import LlamaTokenizer, LlamaForCausalLM
 from transformers import T5ForConditionalGeneration, T5Tokenizer
@@ -17,11 +17,10 @@ from transformers import GPT2TokenizerFast, GPT2Tokenizer
 from ..util.globals import *
 from .singleton_editor import SingletonEditor
 from .batch_editor import BatchEditor
-from ..evaluate import compute_edit_quality, compute_icl_edit_quality
+from ..evaluate import compute_edit_quality, compute_icl_edit_quality, compute_sent_metric
 from ..util import nethook
 from ..util.hparams import HyperParams
 from ..util.alg_dict import *
-import logging.config
 
 logging.basicConfig(format = '%(asctime)s - %(levelname)s - %(name)s -   %(message)s',
                     datefmt = '%m/%d/%Y %H:%M:%S',
@@ -30,15 +29,27 @@ logging.basicConfig(format = '%(asctime)s - %(levelname)s - %(name)s -   %(messa
 LOG = logging.getLogger(__name__)
 os.environ['CUDA_LAUNCH_BLOCKING'] = "1"
 
-logging.config.dictConfig({'version': 1, 'disable_existing_loggers': True})
-
 def make_logs():
 
     f_h, s_h = get_handler('logs', log_name='run.log')
     LOG.addHandler(f_h)
     LOG.addHandler(s_h)
 
+def seed_everything(seed):
+    if seed >= 10000:
+        raise ValueError("seed number should be less than 10000")
+    if torch.distributed.is_initialized():
+        rank = torch.distributed.get_rank()
+    else:
+        rank = 0
+    seed = (rank * 100000) + seed
 
+    torch.manual_seed(seed)
+    np.random.seed(seed)
+    random.seed(seed)
+    
+seed_everything(42)
+  
 class BaseEditor:
     """Base editor for all methods"""
 
@@ -51,7 +62,7 @@ class BaseEditor:
                 hparams: HyperParams,
                  ):
 
-        assert hparams is not None or print('Error: hparams is None.')
+        assert hparams is not None, print('Error: hparams is None.')
 
         self.model_name = hparams.model_name
         self.apply_algo = ALG_DICT[hparams.alg_name]
@@ -62,55 +73,55 @@ class BaseEditor:
         LOG.info("Instantiating model")
 
         if type(self.model_name) is str:
+            device_map = 'auto' if hparams.model_parallel else None
+            torch_dtype = torch.float16 if hasattr(hparams, 'fp16') and hparams.fp16 else torch.float32
             if 't5' in self.model_name.lower():
-                self.model = T5ForConditionalGeneration.from_pretrained(self.model_name, device_map='auto' if hparams.model_parallel else None)
+                self.model = T5ForConditionalGeneration.from_pretrained(self.model_name, torch_dtype=torch_dtype, device_map=device_map)
                 self.tok = T5Tokenizer.from_pretrained(self.model_name)
             elif 'gpt-3.5' in self.model_name.lower():
                 self.model, self.tok = None, None
             elif 'gpt' in self.model_name.lower():
-                self.model = AutoModelForCausalLM.from_pretrained(self.model_name, device_map='auto' if hparams.model_parallel else None)
+                self.model = AutoModelForCausalLM.from_pretrained(self.model_name, torch_dtype=torch_dtype, device_map=device_map)
                 self.tok = GPT2Tokenizer.from_pretrained(self.model_name)
                 self.tok.pad_token_id = self.tok.eos_token_id
             elif 'llama' in self.model_name.lower():
-                self.model = LlamaForCausalLM.from_pretrained(self.model_name, device_map='auto' if hparams.model_parallel else None)
+                self.model = LlamaForCausalLM.from_pretrained(self.model_name, torch_dtype=torch_dtype, device_map=device_map)
                 self.tok = LlamaTokenizer.from_pretrained(self.model_name)
                 self.tok.pad_token_id = self.tok.eos_token_id
             elif 'baichuan' in self.model_name.lower():
-                self.model = AutoModelForCausalLM.from_pretrained(self.model_name,trust_remote_code=True, device_map='auto' if hparams.model_parallel else None)
+                self.model = AutoModelForCausalLM.from_pretrained(self.model_name, torch_dtype=torch_dtype, trust_remote_code=True, device_map=device_map)
                 self.tok = AutoTokenizer.from_pretrained(self.model_name,trust_remote_code=True)
                 self.tok.pad_token_id = self.tok.eos_token_id
             elif 'chatglm' in self.model_name.lower():
-                self.model = AutoModel.from_pretrained(self.model_name,trust_remote_code=True, torch_dtype=torch.float32, device_map='auto' if hparams.model_parallel else None)
+                self.model = AutoModel.from_pretrained(self.model_name,trust_remote_code=True, torch_dtype=torch_dtype, device_map=device_map)
                 self.tok = AutoTokenizer.from_pretrained(self.model_name,trust_remote_code=True)
                 self.tok.unk_token_id = 64787
                 # self.tok.pad_token_id = self.tok.eos_token_id
             elif 'internlm' in self.model_name.lower():
-                self.model = AutoModel.from_pretrained(self.model_name,trust_remote_code=True, device_map='auto' if hparams.model_parallel else None)
+                self.model = AutoModel.from_pretrained(self.model_name,trust_remote_code=True, torch_dtype=torch_dtype, device_map=device_map)
                 self.tok = AutoTokenizer.from_pretrained(self.model_name,trust_remote_code=True)
                 self.tok.pad_token_id = self.tok.eos_token_id
             elif 'qwen' in self.model_name.lower():
-                self.model = AutoModelForCausalLM.from_pretrained(self.model_name, fp32=True if hparams.alg_name == 'ROME' else False, trust_remote_code=True, device_map='auto' if hparams.model_parallel else None)
-                self.tok = AutoTokenizer.from_pretrained(self.model_name, eos_token='<|endoftext|>', pad_token='<|endoftext|>', unk_token='<|endoftext|>', trust_remote_code=True)
-            elif 'bloom' in self.model_name.lower():
-                self.model = AutoModelForCausalLM.from_pretrained(self.model_name, low_cpu_mem_usage=True, torch_dtype=torch.float16, trust_remote_code=True)
-                self.tok = AutoTokenizer.from_pretrained(self.model_name, use_fast=False, padding_side="left", trust_remote_code=True)
+                self.model = AutoModelForCausalLM.from_pretrained(self.model_name,fp32=False,trust_remote_code=True, device_map=device_map)
+                self.tok = AutoTokenizer.from_pretrained(self.model_name, eos_token='<|endoftext|>', pad_token='<|endoftext|>',unk_token='<|endoftext|>', trust_remote_code=True)
+            elif 'mistral' in self.model_name.lower():
+                self.model = AutoModelForCausalLM.from_pretrained(self.model_name, torch_dtype=torch_dtype, device_map=device_map)
+                self.tok = AutoTokenizer.from_pretrained(self.model_name)
+                self.tok.pad_token_id = self.tok.eos_token_id
             else:
                 raise NotImplementedError
 
             if self.tok is not None and (isinstance(self.tok, GPT2Tokenizer) or isinstance(self.tok, GPT2TokenizerFast) or isinstance(self.tok, LlamaTokenizer)) and (hparams.alg_name not in ['ROME', 'MEMIT']):
                 LOG.info('AutoRegressive Model detected, set the padding side of Tokenizer to left...')
                 self.tok.padding_side = 'left'
+            if self.tok is not None and ('mistral' in self.model_name.lower()) and (hparams.alg_name in ['ROME', 'MEMIT']):
+                LOG.info('AutoRegressive Model detected, set the padding side of Tokenizer to right...')
+                self.tok.padding_side = 'right'
         else:
             self.model, self.tok = self.model_name
-        # device_map = {
-        #     0: [_ for _ in range(0, 16)],
-        #     1: [_ for _ in range(16, 32)],
-        #     2: [_ for _ in range(32, 48)]
-        # }
-        # self.model.parallelize(device_map=device_map)
+
         if hparams.model_parallel:
             hparams.device = str(self.model.device).split(":")[1]
-
         if not hparams.model_parallel and hasattr(hparams, 'device'):
             self.model.to(f'cuda:{hparams.device}')
 
@@ -155,13 +166,13 @@ class BaseEditor:
         # assert (locality_prompts is None and locality_ground_truth is None) or \
         #        (isinstance(locality_prompts, str) and isinstance(locality_ground_truth, str)) or \
         #        len(locality_prompts) == len(locality_ground_truth) or print('Error in locality Input.')
-
-        requests = self._prepare_requests(prompts, target_new, ground_truth, rephrase_prompts,
-                                          locality_inputs, portability_inputs, **kwargs)
-
+        if "requests" in kwargs.keys():
+            requests = kwargs["requests"]
+        else:
+            requests = self._prepare_requests(prompts, target_new, ground_truth, rephrase_prompts,
+                                            locality_inputs, portability_inputs, **kwargs)
         if hasattr(self.hparams, 'batch_size') :
-               assert self.hparams.batch_size == 1 or \
-                      print(f'Single Edit, pls set the batch_size to 1....')
+               assert self.hparams.batch_size == 1, print(f'Single Edit, pls set the batch_size to 1....')
 
         # if not os.path.exists(RESULTS_DIR):
         #     os.mkdir(RESULTS_DIR)
@@ -202,26 +213,31 @@ class BaseEditor:
             return all_metrics, edited_model, weights_copy
 
         all_metrics = []
-        for i, request in enumerate(requests):
-            # if self.alg_name == 'IKE':
-            #     assert 'train_ds' in kwargs.keys() or print('IKE need train_ds(For getting In-Context prompt)')
-            #     metrics = {
-            #         "pre": compute_icl_edit_quality(self.model, self.model_name, self.hparams, self.tok, [''],
-            #                                          request, self.hparams.device, pre_edit=True)
-            #     }
-            # else:
-            #     metrics = {
-            #         "pre": compute_edit_quality(self.model, self.model_name, self.hparams, self.tok, request,
-            #                                 self.hparams.device, test_generation=test_generation)
-            #     }
-            metrics = {}
-            all_metrics.append(metrics)
-
+        if 'pre_edit' in kwargs and kwargs['pre_edit'] is not None:
+            metrics = kwargs['pre_edit']
+            all_metrics = metrics
+        else:
+            for i, request in tqdm(enumerate(requests)):
+                if self.alg_name == 'IKE':
+                    assert 'train_ds' in kwargs.keys(), print('IKE need train_ds(For getting In-Context prompt)')
+                    metrics = {
+                        "pre": compute_icl_edit_quality(self.model, self.model_name, self.hparams, self.tok, [''],
+                                                        request, self.hparams.device, pre_edit=True)
+                    }
+                else:
+                    metrics = {
+                        "pre": compute_edit_quality(self.model, self.model_name, self.hparams, self.tok, request,
+                                                self.hparams.device, test_generation=test_generation)
+                    }
+                all_metrics.append(metrics)
+            if 'pre_file' in kwargs and kwargs['pre_file'] is not None:
+                ### Store the pre_edit metric to refrain computing repeatedly
+                json.dump(all_metrics, open(kwargs['pre_file'], 'w'), indent=4)
         for i, request in enumerate(requests):
             start = time()
 
             if self.alg_name == 'IKE':
-                assert 'train_ds' in kwargs.keys() or print('IKE need train_ds(For getting In-Context prompt)')
+                assert 'train_ds' in kwargs.keys(), print('IKE need train_ds(For getting In-Context prompt)')
                 edited_model, weights_copy, icl_examples = self.model, {}, self.apply_algo(
                     self.model,
                     self.tok,
@@ -270,29 +286,34 @@ class BaseEditor:
                     'case_id': i,
                     "requested_rewrite": request,
                     "time": exec_time,
-                    # "post": compute_edit_quality(edited_model, self.model_name, self.hparams, self.tok, request, self.hparams.device, test_generation=test_generation),
+                    "post": compute_edit_quality(edited_model, self.model_name, self.hparams, self.tok, request, self.hparams.device, test_generation=test_generation),
                 })
-                if self.alg_name == 'KN':
+                if "metric_kwargs" in kwargs:
+                    all_metrics[i].update(compute_sent_metric(self.model, edited_model, self.model_name, self.hparams, self.tok, metric_kwargs=kwargs["metric_kwargs"][i], device=self.hparams.device))
+                if self.alg_name == 'KN' or self.alg_name == 'GRACE':
                     with torch.no_grad():
                         weights_copy() # unpatch_fn
-                elif self.alg_name == 'LoRA' and keep_original_weight:
+                elif self.alg_name == 'LoRA' and  keep_original_weight:
                     edited_model.unload()
                     del self.model.peft_config
+                elif self.alg_name == 'MELO':
+                    self.model = edited_model
+                elif self.alg_name == 'LoRA' and not keep_original_weight:
+                    self.model = edited_model
                 else:
                     with torch.no_grad():
                         for k, v in weights_copy.items():
                             nethook.get_parameter(self.model, k)[...] = v.to(f"cuda:{self.hparams.device}")
-                # if 'locality' in all_metrics[i]['post'].keys():
-                #     pass
-                    # for locality_key in request['locality'].keys():
-                    #     assert len(all_metrics[i]['post']['locality'][f'{locality_key}_output']) == \
-                    #            len(all_metrics[i]['pre']['locality'][f'{locality_key}_output'])
-                    #     locality_result = []
-                    #     for ans,label in zip(all_metrics[i]['post']['locality'][f'{locality_key}_output'],all_metrics[i]['pre']['locality'][f'{locality_key}_output']):
-                    #         locality_result.append(np.mean(np.equal(ans, label)))
-                    #     all_metrics[i]['post']['locality'][f'{locality_key}_acc'] = locality_result
-                    #     all_metrics[i]['post']['locality'].pop(f'{locality_key}_output')
-                    # all_metrics[i]['pre'].pop('locality')
+                if 'locality' in all_metrics[i]['post'].keys():
+                    for locality_key in request['locality'].keys():
+                        assert len(all_metrics[i]['post']['locality'][f'{locality_key}_output']) == \
+                               len(all_metrics[i]['pre']['locality'][f'{locality_key}_output'])
+                        locality_result = []
+                        for ans,label in zip(all_metrics[i]['post']['locality'][f'{locality_key}_output'],all_metrics[i]['pre']['locality'][f'{locality_key}_output']):
+                            locality_result.append(np.mean(np.equal(ans, label)))
+                        all_metrics[i]['post']['locality'][f'{locality_key}_acc'] = locality_result
+                        all_metrics[i]['post']['locality'].pop(f'{locality_key}_output')
+                    all_metrics[i]['pre'].pop('locality')
 
                 LOG.info(f"Evaluation took {time() - start}")
 
@@ -306,6 +327,9 @@ class BaseEditor:
             # with open(case_result_path, "w") as f:
             #     json.dump(metrics, f, indent=1)
 
+        if isinstance(edited_model, LORA):
+            edited_model=edited_model.model
+        #for melo
         return all_metrics, edited_model, weights_copy
 
     def batch_edit(self,
@@ -336,15 +360,13 @@ class BaseEditor:
             ground_truth = ['<|endoftext|>' for _ in range(len(prompts))]
 
 
-        assert BatchEditor.is_batchable_method(self.alg_name) \
-               or print(f'The Method {self.alg_name} can not batch edit examples.')
+        assert BatchEditor.is_batchable_method(self.alg_name), print(f'The Method {self.alg_name} can not batch edit examples.')
 
         requests = self._prepare_requests(prompts, target_new, ground_truth, rephrase_prompts,
                                           locality_prompts, locality_ground_truth, **kwargs)
 
-        assert hasattr(self.hparams, 'batch_size') or \
-               print(f'Method {self.alg_name} found, pls specify the batch_size....')
-
+        assert hasattr(self.hparams, 'batch_size'), print(f'Method {self.alg_name} found, pls specify the batch_size....')
+        all_metrics = []
         for record_chunks in self._chunks(requests, self.hparams.batch_size):
             start = time()
 
@@ -361,7 +383,7 @@ class BaseEditor:
             LOG.info(f"Execution editing took {exec_time}")
 
             start = time()
-            all_metrics = []
+            chunk_metrics = []
             for i, request in enumerate(record_chunks):
 
                 metrics = {
@@ -371,22 +393,22 @@ class BaseEditor:
                     "post": compute_edit_quality(edited_model, self.model_name, self.hparams, self.tok, request, self.hparams.device, test_generation=test_generation),
                 }
 
-                all_metrics.append(metrics)
+                chunk_metrics.append(metrics)
 
             with torch.no_grad():
                 for k, v in weights_copy.items():
                     nethook.get_parameter(self.model, k)[...] = v.to(f"cuda:{self.hparams.device}")
 
             for i, request in enumerate(record_chunks):
-                all_metrics[i]["pre"] = compute_edit_quality(self.model, self.model_name, self.hparams, self.tok, request, self.hparams.device, test_generation=test_generation)
+                chunk_metrics[i]["pre"] = compute_edit_quality(self.model, self.model_name, self.hparams, self.tok, request, self.hparams.device, test_generation=test_generation)
 
                 if verbose:
                     LOG.info(
-                        f"{i} editing: {request['prompt']} -> {request['target_new']}  \n {all_metrics[i]}"
+                        f"{i} editing: {request['prompt']} -> {request['target_new']}  \n {chunk_metrics[i]}"
                     )
 
             LOG.info(f"Evaluation took {time() - start}")
-
+            all_metrics.extend(chunk_metrics)
         return all_metrics, edited_model, weights_copy
 
     def edit_dataset(self,
@@ -395,23 +417,20 @@ class BaseEditor:
                      verbose=True
                      ):
         # Make Sure dataset supported
-        assert sum([isinstance(ds, ds_in_dict) for ds_in_dict in DS_DICT.values()]) > 0 \
-        or print(f'DataSet {ds} not supported yet.')
+        assert sum([isinstance(ds, ds_in_dict) for ds_in_dict in DS_DICT.values()]) > 0, print(f'DataSet {ds} not supported yet.')
 
         is_singleton = SingletonEditor.is_singleton_method(self.alg_name)
 
         if is_singleton:
             num_edits = 1 # Single editor method found
         else:
-            assert hasattr(self.hparams, 'batch_size') or \
-                   print(f'Method {self.alg_name} found, pls set the batch_size correctly')
+            assert hasattr(self.hparams, 'batch_size'), print(f'Method {self.alg_name} found, pls set the batch_size correctly')
 
             num_edits = self.hparams.batch_size
 
         all_metrics = []
 
         for record_chunks in tqdm(self._chunks(ds, num_edits), desc='Editing dataset', total=len(ds)/num_edits):
-
             start = time()
             edited_model, weights_copy = self.apply_algo(
                 self.model,
@@ -426,7 +445,7 @@ class BaseEditor:
             LOG.info(f"Execution took {exec_time}")
 
             start = time()
-            all_metrics = []
+            chunk_metrics = []
             for i, request in enumerate(record_chunks):
 
                 metrics = {
@@ -435,23 +454,23 @@ class BaseEditor:
                     "time": exec_time,
                     "post": compute_edit_quality(edited_model, self.model_name, self.hparams, self.tok, request, self.hparams.device),
                 }
-                all_metrics.append(metrics)
+                chunk_metrics.append(metrics)
 
             with torch.no_grad():
                 for k, v in weights_copy.items():
                     nethook.get_parameter(self.model, k)[...] = v.to(f"cuda:{self.hparams.device}")
 
             for i, request in enumerate(record_chunks):
-                all_metrics[i]["pre"] = compute_edit_quality(self.model, self.model_name, self.hparams, self.tok, request,
+                chunk_metrics[i]["pre"] = compute_edit_quality(self.model, self.model_name, self.hparams, self.tok, request,
                                                       self.hparams.device)
 
                 if verbose:
                     LOG.info(
-                        f"{i} editing: {request['prompt']} -> {request['target_new']}  \n {all_metrics[i]}"
+                        f"{i} editing: {request['prompt']} -> {request['target_new']}  \n {chunk_metrics[i]}"
                     )
 
             LOG.info(f"Evaluation took {time() - start}")
-
+            all_metrics.extend(chunk_metrics)
         return all_metrics, edited_model, weights_copy
 
 
@@ -486,7 +505,7 @@ class BaseEditor:
             else:
                 assert len(kwargs['subject']) == len(prompts)
             for prompt_, subject_ in zip(prompts, kwargs['subject']):
-                assert subject_ in prompt_ or print(f'Subject:{subject_} do not exist in prompt: {prompt_}')
+                assert subject_ in prompt_, print(f'Subject:{subject_} do not exist in prompt: {prompt_}')
 
             for i, request in enumerate(requests):
                 request.update(
@@ -511,17 +530,18 @@ class BaseEditor:
                     locality_inputs[locality_key]['prompt'] = [locality_inputs[locality_key]['prompt'],]
                     locality_inputs[locality_key]['ground_truth'] = [locality_inputs[locality_key]['ground_truth'], ]
                 assert len(locality_inputs[locality_key]['prompt']) == len(locality_inputs[locality_key]['ground_truth']) \
-                == len(requests) or print('One Edit instance needs one locality input.....')
+                == len(requests), print('One Edit instance needs one locality input.....')
 
                 for i, request in enumerate(requests):
-                    request['locality'].update(
-                        {
-                            locality_key: {
-                                f'prompt': locality_inputs[locality_key]['prompt'][i],
-                                f'ground_truth': locality_inputs[locality_key]['ground_truth'][i]
+                    if locality_inputs[locality_key]['prompt'][i] is not None:
+                        request['locality'].update(
+                            {
+                                locality_key: {
+                                    f'prompt': locality_inputs[locality_key]['prompt'][i],
+                                    f'ground_truth': locality_inputs[locality_key]['ground_truth'][i]
+                                }
                             }
-                        }
-                    )
+                        )
 
         if portability_inputs is not None:
             for portability_key in portability_inputs.keys():
@@ -529,32 +549,19 @@ class BaseEditor:
                     portability_inputs[portability_key]['prompt'] = [portability_inputs[portability_key]['prompt'],]
                     portability_inputs[portability_key]['ground_truth'] = [portability_inputs[portability_key]['ground_truth'], ]
                 assert len(portability_inputs[portability_key]['prompt']) == len(portability_inputs[portability_key]['ground_truth']) \
-                == len(requests) or print('One Edit instance needs one portability input.....')
+                == len(requests), print('One Edit instance needs one portability input.....')
 
                 for i, request in enumerate(requests):
-                    request['portability'].update(
-                        {
-                            portability_key: {
-                                'prompt': portability_inputs[portability_key]['prompt'][i],
-                                'ground_truth': portability_inputs[portability_key]['ground_truth'][i]
+                    if portability_inputs[portability_key]['prompt'][i] is not None:
+                        request['portability'].update(
+                            {
+                                portability_key: {
+                                    'prompt': portability_inputs[portability_key]['prompt'][i],
+                                    'ground_truth': portability_inputs[portability_key]['ground_truth'][i]
+                                }
                             }
-                        }
-                    )
+                        )
         return requests
-
-
-# if __name__ == "__main__":
-#
-#     editor = BaseEditor(alg_name='KN', model_name='/nature/peng/serac/hugging_cache/t5-3b-finetuned-counterfact-10000', hparams_fname='t5-3b.json')
-#
-#     editor.edit(
-#         prompts='What university did Watts Humphrey attend?',
-#         ground_truth='Illinois Institute of Technology',
-#         target_new='University of Michigan'
-#     )
-#
-#     metrics, edited_model, _ = editor.edit(prompts='What university did Watts Humphrey attend?', ground_truth='Illinois Institute of Technology', target_new='University of Michigan')
-
 
     def edit_requests(self,
              requests,
@@ -576,8 +583,7 @@ class BaseEditor:
             self.hparams.batch_size = 1
 
         if hasattr(self.hparams, 'batch_size') :
-               assert self.hparams.batch_size == 1 or \
-                      print(f'Single Edit, pls set the batch_size to 1....')
+               assert self.hparams.batch_size == 1, print(f'Single Edit, pls set the batch_size to 1....')
 
         # if not os.path.exists(RESULTS_DIR):
         #     os.mkdir(RESULTS_DIR)
@@ -620,7 +626,7 @@ class BaseEditor:
         all_metrics = []
         for i, request in tqdm(enumerate(requests)):
             if self.alg_name == 'IKE':
-                assert 'train_ds' in kwargs.keys() or print('IKE need train_ds(For getting In-Context prompt)')
+                assert 'train_ds' in kwargs.keys(), print('IKE need train_ds(For getting In-Context prompt)')
                 metrics = {
                     "pre": compute_icl_edit_quality(self.model, self.model_name, self.hparams, self.tok, [''],
                                                      request, self.hparams.device, pre_edit=True)
@@ -636,7 +642,7 @@ class BaseEditor:
             start = time()
 
             if self.alg_name == 'IKE':
-                assert 'train_ds' in kwargs.keys() or print('IKE need train_ds(For getting In-Context prompt)')
+                assert 'train_ds' in kwargs.keys(), print('IKE need train_ds(For getting In-Context prompt)')
                 edited_model, weights_copy, icl_examples = self.model, {}, self.apply_algo(
                     self.model,
                     self.tok,
@@ -687,7 +693,7 @@ class BaseEditor:
                     "time": exec_time,
                     "post": compute_edit_quality(edited_model, self.model_name, self.hparams, self.tok, request, self.hparams.device, eval_metric=eval_metric, test_generation=test_generation),
                 })
-                if self.alg_name == 'KN':
+                if self.alg_name == 'KN' or self.alg_name == 'GRACE':
                     with torch.no_grad():
                         weights_copy() # unpatch_fn
                 elif self.alg_name == 'LoRA' and keep_original_weight:
@@ -721,3 +727,51 @@ class BaseEditor:
             #     json.dump(metrics, f, indent=1)
 
         return all_metrics, edited_model, weights_copy
+
+    def normal_edit(
+        self,
+        prompts: List[str],
+        target_new: List[str],
+        keep_original_weight=False,
+        epoch: int=5,
+    ):
+        """
+        `prompts`: list or str
+            the prompts to edit
+        `ground_truth`: str
+            the ground truth / expected output
+        """
+        assert len(prompts) == len(target_new)
+        ground_truth = ['<|endoftext|>' for _ in range(len(prompts))]
+
+
+        assert BatchEditor.is_batchable_method(self.alg_name), print(f'The Method {self.alg_name} can not batch edit examples.')
+
+        requests = self._prepare_requests(prompts, target_new, ground_truth)
+
+        assert hasattr(self.hparams, 'batch_size'), print(f'Method {self.alg_name} found, pls specify the batch_size....')
+
+        # print(f"[editor.py][batch_edit] `batch_size`={self.hparams.batch_size}")
+        # for epc in range(epoch):
+        #     print(f"[editor.py][batch_edit] `Epoch` = {epc+1}")
+        #     for record_chunks in self._chunks(requests, self.hparams.batch_size):
+        start = time()
+
+        edited_model, weights_copy = self.apply_algo(
+            self.model,
+            self.tok,
+            requests,  # record_chunks -> requests
+            self.hparams,
+            copy=False,
+            return_orig_weights=True,
+            keep_original_weight=keep_original_weight,
+        )
+        exec_time = time() - start
+        LOG.info(f"Execution editing took {exec_time}")
+
+        with torch.no_grad():
+            for k, v in weights_copy.items():
+                nethook.get_parameter(self.model, k)[...] = v.to(f"cuda:{self.hparams.device}")
+
+        return None, edited_model, weights_copy
+

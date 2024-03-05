@@ -3,6 +3,7 @@ Contains evaluation utilities for pytorch-based rewriting methods.
 To use, simply call `compute_rewrite_quality_zsre` with the
 appropriate arguments, which returns a dictionary containing them.
 """
+from ..models.melo.melo import LORA
 
 import typing
 from itertools import chain
@@ -21,7 +22,8 @@ from .evaluate_utils import (
     test_generation_quality, 
     PPL,
     kl_loc_loss,
-    es_sent
+    es_sent,
+    F1
 )
 
 def compute_edit_quality(
@@ -46,7 +48,8 @@ def compute_edit_quality(
     :param vec: ???
     :return: Dictionary containing rewriting metrics
     """
-
+    if isinstance(model,LORA):
+        model=model.model
     # First, unpack rewrite evaluation record.
     target_new, ground_truth = (
         record[x] for x in ["target_new", "ground_truth"]
@@ -79,8 +82,11 @@ def compute_edit_quality(
                                             record['portability'][portability_key]['prompt'],
                                             record['portability'][portability_key]['ground_truth'], device=device)
             )
-    if  test_generation:
-        ret['fluency'] = test_generation_quality(model=model,tok=tok,prefixes=rewrite_prompts if isinstance(rewrite_prompts,list) else [rewrite_prompts,], max_out_len=100)
+    if test_generation:
+        if hparams.alg_name == 'GRACE':
+            ret['fluency'] = test_generation_quality(model=model,tok=tok,prefixes=rewrite_prompts if isinstance(rewrite_prompts,list) else [rewrite_prompts,], max_out_len=100, vanilla_generation=True)
+        else:
+            ret['fluency'] = test_generation_quality(model=model,tok=tok,prefixes=rewrite_prompts if isinstance(rewrite_prompts,list) else [rewrite_prompts,], max_out_len=100, vanilla_generation=False)
     return ret
 
 def compute_rewrite_or_rephrase_quality(
@@ -104,6 +110,18 @@ def compute_rewrite_or_rephrase_quality(
         ret = {
             f"{key}_ppl": ppl
         }
+    elif hparams.alg_name=="GRACE":
+        # ppl = PPL(model, tok, prompt, target_new, device)
+        if 't5' in model_name.lower():
+            acc = test_seq2seq_batch_prediction_acc(model, tok, hparams, prompt, target_new, device)
+        else:
+            acc = test_prediction_acc(model, tok, hparams, prompt, target_new, device, vanilla_generation=True)
+        f1 = F1(model,tok,hparams,prompt,target_new,device, vanilla_generation=True)
+        ret = {
+            f"{key}_acc": acc,
+            # f"{key}_PPL": ppl,
+            f"{key}_F1":f1     
+        }        
     else:
         if 't5' in model_name.lower():
             acc = test_seq2seq_batch_prediction_acc(model, tok, hparams, prompt, target_new, device)
@@ -128,7 +146,7 @@ def compute_locality_quality(
     if 't5' in model_name.lower():
         loc_tokens = test_seq2seq_batch_prediction_acc(model, tok, hparams, prompt, locality_ground_truth, device, locality=True)
     else:
-        loc_tokens = test_prediction_acc(model, tok, hparams, prompt, locality_ground_truth, device, locality=True)
+        loc_tokens = test_prediction_acc(model, tok, hparams, prompt, locality_ground_truth, device, locality=True, vanilla_generation=hparams.alg_name=='GRACE')
 
     if type(loc_tokens) is not list:
         loc_tokens = [loc_tokens,]
@@ -187,26 +205,60 @@ def compute_icl_edit_quality(
 
     if 'locality' in record.keys() and any(record['locality']):
         for locality_key in record['locality'].keys():
-            pre_neighbor = icl_lm_eval(model, model_name, hparams, tok, [''], record['locality'][locality_key]['ground_truth'],
-                                       f"New Fact: {prompt} {target_new}\nPrompt: {record['locality'][locality_key]['prompt']}", neighborhood=True)
-            post_neighbor = icl_lm_eval(model, model_name, hparams, tok, icl_examples, record['locality'][locality_key]['ground_truth'],
+            if isinstance(record['locality'][locality_key]['ground_truth'],list):
+                pre_neighbor = []
+                post_neighbor = []
+                for x_a, x_p in zip(record['locality'][locality_key]['ground_truth'],record['locality'][locality_key]['prompt']):             
+                    tmp_pre_neighbor = icl_lm_eval(model, model_name, hparams, tok, [''], x_a,
+                                            f"New Fact: {prompt} {target_new}\nPrompt: {x_p}", neighborhood=True)
+                    tmp_post_neighbor = icl_lm_eval(model, model_name, hparams, tok, icl_examples, x_a,
+                                                f"New Fact: {prompt} {target_new}\nPrompt: {x_p}", neighborhood=True)
+                    if type(tmp_pre_neighbor) is not list:
+                        tmp_pre_neighbor = [tmp_pre_neighbor, ]
+                    if type(tmp_post_neighbor) is not list:
+                        tmp_post_neighbor = [tmp_post_neighbor, ]
+                    assert len(tmp_pre_neighbor) == len(tmp_post_neighbor)
+                    pre_neighbor.append(tmp_pre_neighbor)
+                    post_neighbor.append(tmp_post_neighbor)
+                res = []
+                for ans,label in zip(pre_neighbor,post_neighbor):
+                    temp_acc = np.mean(np.equal(ans, label))
+                    if np.isnan(temp_acc):
+                        continue
+                    res.append(temp_acc)
+                ret['locality'][f'{locality_key}_acc'] = res
+            else:
+                pre_neighbor = icl_lm_eval(model, model_name, hparams, tok, [''], record['locality'][locality_key]['ground_truth'],
                                         f"New Fact: {prompt} {target_new}\nPrompt: {record['locality'][locality_key]['prompt']}", neighborhood=True)
-            if type(pre_neighbor) is not list:
-                pre_neighbor = [pre_neighbor, ]
-            if type(post_neighbor) is not list:
-                post_neighbor = [post_neighbor, ]
-            assert len(pre_neighbor) == len(post_neighbor)
-
-            ret['locality'][f'{locality_key}_acc'] = np.mean(np.equal(pre_neighbor, post_neighbor))
+                post_neighbor = icl_lm_eval(model, model_name, hparams, tok, icl_examples, record['locality'][locality_key]['ground_truth'],
+                                            f"New Fact: {prompt} {target_new}\nPrompt: {record['locality'][locality_key]['prompt']}", neighborhood=True)
+                if type(pre_neighbor) is not list:
+                    pre_neighbor = [pre_neighbor, ]
+                if type(post_neighbor) is not list:
+                    post_neighbor = [post_neighbor, ]
+                assert len(pre_neighbor) == len(post_neighbor)
+            
+                ret['locality'][f'{locality_key}_acc'] = np.mean(np.equal(pre_neighbor, post_neighbor))
     # Form a list of lists of prefixes to test.
     if 'portability' in record.keys() and any(record['portability']):
         for portability_key in record['portability'].keys():
             if pre_edit:
-                portability_acc = icl_lm_eval(model, model_name, hparams, tok, icl_examples, record['portability'][portability_key]['ground_truth'],
-                                              record['portability'][portability_key]['prompt'])
+                icl_input = ['']
+                x_prefix=""
             else:
+                icl_input = icl_examples
+                x_prefix=f"New Fact: {prompt} {target_new}\nPrompt: "
+            if isinstance(record['portability'][portability_key]['ground_truth'],list):
+                portability_acc = []
+                for x_a, x_p in zip(record['portability'][portability_key]['ground_truth'],record['portability'][portability_key]['prompt']): 
+                    tmp_portability_acc = icl_lm_eval(model, model_name, hparams, tok,icl_input, x_a,
+                                            f"{x_prefix}{x_p}")
+                portability_acc.append(tmp_portability_acc)
+            else:
+                portability_acc = icl_lm_eval(model, model_name, hparams, tok, [''], record['portability'][portability_key]['ground_truth'],
+                                                record['portability'][portability_key]['prompt'])
                 portability_acc = icl_lm_eval(model, model_name, hparams, tok, icl_examples, record['portability'][portability_key]['ground_truth'],
-                                              f"New Fact: {prompt} {target_new}\nPrompt: {record['portability'][portability_key]['prompt']}")
+                                                f"New Fact: {prompt} {target_new}\nPrompt: {record['portability'][portability_key]['prompt']}")
             ret['portability'][f'{portability_key}_acc'] = portability_acc
     return ret
 
@@ -321,14 +373,22 @@ def compute_icl_multimodal_edit_quality(
         ret['rephrase_image_acc'] = rephrase_image_acc
     
     if "locality_prompt" in record.keys():
-        locality_acc, _ = icl_multimodal_lm_eval(model, model_name, hparams, tok, icl_examples,
-                                loc_a, f'New Fact: {loc_q} {loc_a}\nPrompt: {loc_q}', None)
-        ret['locality_acc'] = locality_acc
+        if pre_edit:
+            _, _, locality_output = icl_multimodal_lm_eval(model, model_name, hparams, tok, icl_examples,
+                                    loc_a, loc_q, None, is_loc=True) 
+        else:
+            _, _, locality_output = icl_multimodal_lm_eval(model, model_name, hparams, tok, icl_examples,
+                                    loc_a, f'New Fact: {prompt} {target}\nPrompt: {loc_q}', None, is_loc=True) 
+        ret['locality_output'] = locality_output
     
     if "multimodal_locality_image" in record.keys():
-        locality_image_acc, _ = icl_multimodal_lm_eval(model, model_name, hparams, tok, icl_examples,
-                               m_loc_a, f'New Fact: {m_loc_q} {m_loc_a}\nPrompt: {m_loc_q}', m_loc_image)
-        ret['locality_image_acc'] = locality_image_acc
+        if pre_edit:
+            _, _, locality_image_output = icl_multimodal_lm_eval(model, model_name, hparams, tok, icl_examples,
+                                    m_loc_a, m_loc_q, m_loc_image, is_loc=True) 
+        else:
+            _, _, locality_image_output = icl_multimodal_lm_eval(model, model_name, hparams, tok, icl_examples,
+                                    m_loc_a, f'New Fact: {prompt} {target}\nPrompt: {m_loc_q}', m_loc_image, is_loc=True) 
+        ret['multimodal_locality_output'] = locality_image_output
             
     return ret
 
@@ -341,13 +401,14 @@ def icl_multimodal_lm_eval(
         target,
         x,
         image,
+        is_loc=False,
         neighborhood=False
 )-> typing.Dict:
     device = torch.device(f'cuda:{hparams.device}')
     
     samples = prepare_multimodal_edit(hparams, tokenizer, target, [''.join(icl_examples) + f'{x}'], image) 
     
-    return compute_multimodal_edit_quality(model, samples)
+    return compute_multimodal_edit_quality(model, samples) if not is_loc else compute_multimodal_edit_quality_demo(model, samples)
 
 def prepare_multimodal_edit(hparams,
                             tok,
@@ -366,7 +427,7 @@ def prepare_multimodal_edit(hparams,
         prompts_len = [len(tok.encode(prompt, add_special_tokens=False)) for prompt in prompts]
         target = tok(target, add_special_tokens=False, return_tensors="pt",)["input_ids"]
     else:
-        prompts_len = [len(tok.encode(prompt,)) for prompt in prompts]  
+        prompts_len = [len(tok.encode(prompt,  add_special_tokens=False)) for prompt in prompts]  
         target = tok([' ' + target_ if target_[0] != ' ' else target_ for target_ in target], add_special_tokens=False, return_tensors="pt",)["input_ids"]
         
     ret = {
@@ -411,6 +472,7 @@ def compute_multimodal_edit_quality_demo(model, batch):
             logits = outputs.logits.detach().cpu()    
         # targ = outputs.labels.detach().cpu()
         targ = batch["labels"].cpu()
+    logits_ = logits.clone()
     if logits.dim() == 3:
         logits = logits[:, :-1]
         # targ = targ[:, 1:]
@@ -423,7 +485,7 @@ def compute_multimodal_edit_quality_demo(model, batch):
     num_non_padding = mask.sum().float().item()
     acc = correct.sum() / num_non_padding
     
-    return acc, pred_ids.numpy(), logits
+    return acc, pred_ids.numpy(), logits_
 
 def compute_multimodal_edit_results(
     model,

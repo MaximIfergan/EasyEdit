@@ -48,12 +48,16 @@ class ZsreDataset(Dataset):
                 tokenizer.pad_token_id = tokenizer.eos_token_id
                 tokenizer.padding_side = 'left'
                 print('LlamaTokenizer Detected, Set pad token id and left padding!!!')
-            if 'qwen' in config.model_name.lower():
+            elif 'qwen' in config.model_name.lower():
                 tokenizer.eos_token='<|endoftext|>'
                 tokenizer.pad_token='<|endoftext|>'
                 tokenizer.unk_token='<|endoftext|>'
                 # tokenizer.padding_side = 'left'
                 # print('QwenTokenizer Detected, Set pad token id and left padding!!!')
+            elif 'mistral' in config.model_name.lower():
+                tokenizer.pad_token_id = tokenizer.eos_token_id
+                tokenizer.padding_side = 'left'
+                print('MistralTokenizer Detected, Set pad token id and left padding!!!')
             self.tok = tokenizer
 
         with open(zsre_loc, "r") as f:
@@ -217,6 +221,10 @@ class ZsreDataset(Dataset):
         rephrase = [rephrase_ + ' ' + trg_ for rephrase_, trg_ in zip(rephrase, trg)]
         loc = [loc_ + ' ' + loc_ans_ for loc_, loc_ans_ in zip(loc, loc_ans)]
 
+        if 'gpt' in self.config.tokenizer_class.lower():
+            trg = [' ' + t for t in trg]
+            loc_ans = [' ' + t for t in loc_ans]
+            
         batches = {
             f"{k1}_{k2}": v2
             for k1, v1 in {

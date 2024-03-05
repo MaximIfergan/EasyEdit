@@ -6,6 +6,7 @@ import typing
 from ..util.generate import generate_fast
 import torch.nn.functional as F
 from ..trainer import *
+from sklearn.metrics import f1_score
 
 
 def test_batch_prediction_acc(model, tok, hparams, prompts, target, device, locality=False):
@@ -77,7 +78,23 @@ def test_seq2seq_batch_prediction_acc(model, tok, hparams, prompts, targets, dev
         return torch.mean((trg_tok['input_ids'][:,:-1] == ans[:,:-1]).float(), dim=-1).detach().cpu().numpy().tolist()
 
 
-def test_prediction_acc(model, tok, hparams, prompts, targets, device, locality=False):
+def test_prediction_acc(model, tok, hparams, prompts, targets, device, locality=False, vanilla_generation=False):
+    if vanilla_generation:
+        target_new_tokens = tok.encode(' ' + targets)
+        if target_new_tokens[0] == tok.pad_token_id or (hasattr(tok, 'bos_token_id') and target_new_tokens[0] == tok.bos_token_id):
+            target_new_tokens = tok.encode(targets)
+            target_new_tokens = target_new_tokens[1:]
+        prompt_tok = tok(
+            prompts,
+            return_tensors="pt",
+        ).to(device)
+        gen_token = model.generate(
+            input_ids=prompt_tok['input_ids'],
+            attention_mask=prompt_tok['attention_mask'],
+            max_new_tokens=len(target_new_tokens)
+        )
+
+        return [np.mean(np.equal(target_new_tokens, gen_token.detach().cpu().numpy().tolist()[0][-len(target_new_tokens):]))]
     if isinstance(prompts, str):
         prompts,targets = [prompts,], [targets,]
     prompt_target = [prompt + ' ' + target for prompt, target in zip(prompts,targets)]
@@ -159,6 +176,7 @@ def test_generation_quality(
     tok,
     prefixes: typing.List[str],
     max_out_len: int,
+    vanilla_generation: bool = False
     # consistency_texts: typing.List[str],
     # essence_texts: typing.List[str],
     # vec: TfidfVectorizer,
@@ -169,6 +187,7 @@ def test_generation_quality(
         prefixes,
         n_gen_per_prompt=1,
         max_out_len=max_out_len,
+        vanilla_generation=vanilla_generation,
     )
 
     ngram_entropy = n_gram_entropy(gen_texts)
@@ -232,7 +251,7 @@ def PPL(
 ):
     if isinstance(prompt, str):
         prompt,target_new = [prompt,], [target_new,]
-    full_prompt = [f"{p} {l} <|endoftext|>" for p, l in zip(prompt, target_new)]
+    full_prompt = [f"{p} {l}" for p, l in zip(prompt, target_new)]
     prompt_ids = tok(list(prompt), return_tensors="pt", padding=True, truncation=True)["input_ids"]
     num_prompt_toks = [int((i != tok.pad_token_id).sum()) for i in prompt_ids]
     tokens = tok(full_prompt, return_tensors="pt", padding=True, truncation=True)
@@ -353,3 +372,53 @@ def kl_loc_loss(pre, post, mask=None):
             return (kl * mask_).sum() / mask_.sum()
 
     raise NotImplementedError
+
+def F1(model, tok, hparams, prompts, targets, device, locality=False, vanilla_generation=True):
+    if vanilla_generation:
+        target_new_tokens = tok.encode(' ' + targets)
+        if target_new_tokens[0] == tok.pad_token_id or (hasattr(tok, 'bos_token_id') and target_new_tokens[0] == tok.bos_token_id):
+            target_new_tokens = tok.encode(targets)
+            target_new_tokens = target_new_tokens[1:]
+        prompt_tok = tok(
+            prompts,
+            return_tensors="pt",
+        ).to(device)
+        gen_token = model.generate(
+            input_ids=prompt_tok['input_ids'],
+            attention_mask=prompt_tok['attention_mask'],
+            max_new_tokens=len(target_new_tokens)
+        )
+        return f1_score(target_new_tokens, gen_token.detach().cpu().numpy().tolist()[0][-len(target_new_tokens):], average='macro')
+    if isinstance(prompts, str):
+        prompts,targets = [prompts,], [targets,]
+    prompt_target = [prompt + ' ' + target for prompt, target in zip(prompts,targets)]
+    max_prompt_len = max([len(tok.encode(_)) for _ in prompt_target]) + 1
+    prompt_target_tok = tok(
+        prompt_target,
+        padding=True,
+        truncation=True,
+        max_length=max(hparams.max_length, max_prompt_len),
+        return_tensors="pt",
+    ).to(f"cuda:{device}")
+    prompt_tok = tok(
+        prompts,
+        padding=True,
+        truncation=True,
+        max_length=max(hparams.max_length, max_prompt_len),
+        return_tensors="pt",
+    )
+    num_prompt_toks = [int((i != tok.pad_token_id).sum()) for i in prompt_tok['input_ids']]
+    num_pad_toks = [int((i == tok.pad_token_id).sum()) for i in prompt_target_tok['input_ids'].cpu()]
+    prompt_len = [x+y for x,y in zip(num_pad_toks,num_prompt_toks)]
+    with torch.no_grad():
+        outputs = model(**prompt_target_tok)
+        if type(outputs) is torch.Tensor:
+            logits = outputs
+        else:
+            logits = outputs.logits
+        answers = torch.argmax(logits, dim=-1).squeeze().detach().cpu().numpy().tolist()
+        labels = prompt_target_tok['input_ids'].squeeze().detach().cpu().numpy().tolist()
+        answers = slice_list(answers,prompt_len,left=True)
+        labels = slice_list(labels,prompt_len,left=False)
+
+        return f1_score(answers, labels, average='macro')

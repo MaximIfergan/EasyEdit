@@ -15,12 +15,12 @@ def print_result(metrics):
     rephrase_acc = mean([m['post']['rephrase_acc'].item() for m in metrics])
     rephrase_image_acc = mean([m['post']['rephrase_image_acc'].item() for m in metrics])
     locality_acc = mean([m['post']['locality_acc'].item() for m in metrics])
-    locality_image_acc = mean([m['post']['locality_image_acc'].item() for m in metrics])
+    locality_image_acc = mean([m['post']['multimodal_locality_acc'].item() for m in metrics])
     print(f'rewrite_acc: {rewrite_acc}')
     print(f'rephrase_acc: {rephrase_acc}')
     print(f'rephrase_image_acc: {rephrase_image_acc}')
     print(f'locality_acc: {locality_acc}')
-    print(f'locality_image_acc: {locality_image_acc}')
+    print(f'multimodal_locality_acc: {locality_image_acc}')
 
 def train_MEND_MiniGPT4_Caption():
     hparams = MENDMultimodalTrainingHparams.from_hparams('hparams/TRAINING/MEND/minigpt4.yaml')
@@ -39,6 +39,18 @@ def train_MEND_MiniGPT4_VQA():
     hparams = MENDMultimodalTrainingHparams.from_hparams('hparams/TRAINING/MEND/minigpt4.yaml')
     train_ds = VQADataset('data/vqa_train.json', config=hparams)
     eval_ds = VQADataset('data/vqa_eval.json', config=hparams)
+    trainer = MultimodalTrainer(
+        config=hparams,
+        train_set=train_ds,
+        val_set=eval_ds
+    )
+    
+    trainer.run() 
+
+def train_MEND_MiniGPT4_VQA_debug():
+    hparams = MENDMultimodalTrainingHparams.from_hparams('hparams/TRAINING/MEND/minigpt4.yaml')
+    train_ds = VQADataset('data/vqa_train.json', config=hparams, size=100)
+    eval_ds = VQADataset('data/vqa_eval.json', config=hparams, size=100)
     trainer = MultimodalTrainer(
         config=hparams,
         train_set=train_ds,
@@ -111,7 +123,7 @@ def train_MEND_Blip2OPT_VQA_Vision():
 def test_MEND_MiniGPT4_VQA():
     hparams = MENDMultimodalHparams.from_hparams('hparams/MEND/minigpt4.yaml')
     # train_ds = VQADataset('data/vqa_train.json', config=hparams)
-    eval_ds = VQADataset('data/vqa_eval_test.json', config=hparams)
+    eval_ds = VQADataset('data/vqa_eval.json', config=hparams, size=100)
     trainer = MultimodalTrainer(
         config=hparams,
         train_set=eval_ds,
@@ -522,8 +534,8 @@ def test_IKE_Blip2OPT_VQA_debug():
     
     hparams = IKEMultimodalHyperParams.from_hparams('hparams/IKE/blip2.yaml')
     editor = MultimodalEditor.from_hparams(hparams)
-    train_ds = VQADataset('data/vqa_train.json', config=hparams, size=20)
-    eval_ds = VQADataset('data/vqa_eval.json', config=hparams, size=20)
+    train_ds = VQADataset('data/vqa_train.json', config=hparams, size=100)
+    eval_ds = VQADataset('data/vqa_eval.json', config=hparams, size=100)
     metrics, edited_model, _ = editor.edit_dataset(
         ds=eval_ds,
         train_ds=train_ds,
@@ -681,10 +693,11 @@ if __name__ == "__main__":
     # train_MEND_Blip2OPT_VQA_Vision()
     # train_MEND_Blip2OPT_VQA_debug()
     # train_MEND_Blip2OPT_VQA_Vision_debug()
+    train_MEND_MiniGPT4_VQA_debug()
     
     
     # train_SERAC_MiniGPT4_Caption()
-    train_SERAC_MiniGPT4_Caption_debug()
+    # train_SERAC_MiniGPT4_Caption_debug()
     # train_SERAC_MiniGPT4_VQA()
     # train_SERAC_Blip2OPT_Caption()
     # train_SERAC_Blip2OPT_VQA()
