@@ -126,6 +126,8 @@ def layer_stats(
 
     # Continue with computation of statistics
     batch_size = 100  # Examine this many dataset texts at once
+    batch_size = 80  # Examine this many dataset texts at once
+
     if hasattr(model.config, 'n_positions'):
         npos = model.config.n_positions
     elif hasattr(model.config, 'max_sequence_length'):
@@ -147,7 +149,6 @@ def layer_stats(
         batch_tokens = npos * 3  # Sort and divide into batches with this many tokens
     if precision is None:
         precision = "float64"
-        precision = "float32"
     dtype = getattr(torch, precision)
     size_suffix = "" if sample_size is None else f"_{sample_size}"
     if batch_tokens < npos:
