@@ -126,7 +126,7 @@ def layer_stats(
 
     # Continue with computation of statistics
     batch_size = 100  # Examine this many dataset texts at once
-    batch_size = 20  # Examine this many dataset texts at once  # TODO delete for debug
+    batch_size = 10  # Examine this many dataset texts at once  # TODO delete for debug
 
     if hasattr(model.config, 'n_positions'):
         npos = model.config.n_positions
