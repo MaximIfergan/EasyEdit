@@ -46,8 +46,7 @@ def apply_rome_to_model(
     # Save changes:
     deltas_to_save = deepcopy(deltas)
     for w_name, (delta_u, delta_v) in deltas_to_save.items():
-        upd_matrix_cp = (delta_u.unsqueeze(1) @ delta_v.unsqueeze(0)).cpu()
-        deltas_to_save[w_name] = upd_matrix_cp
+        deltas_to_save[w_name] = (delta_u.cpu(), delta_v.cpu())
     with open(f"edition_mats/{request['s_id']}.pickle", 'wb') as handle:
         pickle.dump(deltas_to_save, handle, protocol=pickle.HIGHEST_PROTOCOL)
 
