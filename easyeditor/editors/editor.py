@@ -70,7 +70,7 @@ class BaseEditor:
 
         make_logs()
 
-        LOG.info("Instantiating model")
+        # LOG.info("Instantiating model")
 
         if type(self.model_name) is str:
             device_map = 'auto' if hparams.model_parallel else None
@@ -117,10 +117,10 @@ class BaseEditor:
                 raise NotImplementedError
 
             if self.tok is not None and (isinstance(self.tok, GPT2Tokenizer) or isinstance(self.tok, GPT2TokenizerFast) or isinstance(self.tok, LlamaTokenizer)) and (hparams.alg_name not in ['ROME', 'MEMIT']):
-                LOG.info('AutoRegressive Model detected, set the padding side of Tokenizer to left...')
+                # LOG.info('AutoRegressive Model detected, set the padding side of Tokenizer to left...')
                 self.tok.padding_side = 'left'
             if self.tok is not None and ('mistral' in self.model_name.lower()) and (hparams.alg_name in ['ROME', 'MEMIT']):
-                LOG.info('AutoRegressive Model detected, set the padding side of Tokenizer to right...')
+                # LOG.info('AutoRegressive Model detected, set the padding side of Tokenizer to right...')
                 self.tok.padding_side = 'right'
         else:
             self.model, self.tok = self.model_name
@@ -141,6 +141,7 @@ class BaseEditor:
              portability_inputs: Optional[Dict] = None,
              keep_original_weight=False,
              verbose=True,
+             s_id="no_id",
              **kwargs
              ):
         """
@@ -176,6 +177,9 @@ class BaseEditor:
         else:
             requests = self._prepare_requests(prompts, target_new, ground_truth, rephrase_prompts,
                                             locality_inputs, portability_inputs, **kwargs)
+        for req in requests:
+            req["s_id"] = s_id
+
         if hasattr(self.hparams, 'batch_size') :
                assert self.hparams.batch_size == 1, print(f'Single Edit, pls set the batch_size to 1....')
 
@@ -201,7 +205,7 @@ class BaseEditor:
             )
             exec_time = time() - start
 
-            LOG.info(f"Execution editing took {exec_time}")
+            # LOG.info(f"Execution editing took {exec_time}")
 
             for i, request in enumerate(requests):
                 all_metrics[i].update({
@@ -211,10 +215,10 @@ class BaseEditor:
                     "post": {}
                 })
 
-                if verbose:
-                    LOG.info(
-                        f"{i} editing: {request['prompt']} -> {request['target_new']}  \n {all_metrics[i]}"
-                    )
+                # if verbose:
+                    # LOG.info(
+                    #     f"{i} editing: {request['prompt']} -> {request['target_new']}  \n {all_metrics[i]}"
+                    # )
             return all_metrics, edited_model, weights_copy
 
         all_metrics = []
@@ -254,7 +258,7 @@ class BaseEditor:
                     train_ds=kwargs['train_ds']
                 )
                 exec_time = time() - start
-                LOG.info(f"Execution {i} editing took {exec_time}")
+                # LOG.info(f"Execution {i} editing took {exec_time}")
                 start = time()
                 all_metrics[i].update({
                     'case_id': i,
@@ -265,12 +269,12 @@ class BaseEditor:
                 })
                 all_metrics[i]['pre'].pop('locality')
 
-                LOG.info(f"Evaluation took {time() - start}")
+                # LOG.info(f"Evaluation took {time() - start}")
 
-                if verbose:
-                    LOG.info(
-                        f"{i} editing: {request['prompt']} -> {request['target_new']}  \n {all_metrics[i]}"
-                    )
+                # if verbose:
+                #     LOG.info(
+                #         f"{i} editing: {request['prompt']} -> {request['target_new']}  \n {all_metrics[i]}"
+                #     )
 
             else:
                 edited_model, weights_copy = self.apply_algo(
@@ -284,7 +288,7 @@ class BaseEditor:
                     train_ds=kwargs['train_ds'] if self.alg_name == 'IKE' else None
                 )
                 exec_time = time() - start
-                LOG.info(f"Execution {i} editing took {exec_time}")
+                # LOG.info(f"Execution {i} editing took {exec_time}")
 
                 start = time()
                 all_metrics[i].update({
@@ -320,12 +324,12 @@ class BaseEditor:
                         all_metrics[i]['post']['locality'].pop(f'{locality_key}_output')
                     all_metrics[i]['pre'].pop('locality')
 
-                LOG.info(f"Evaluation took {time() - start}")
+                # LOG.info(f"Evaluation took {time() - start}")
 
-                if verbose:
-                    LOG.info(
-                        f"{i} editing: {request['prompt']} -> {request['target_new']}  \n {all_metrics[i]}"
-                    )
+                # if verbose:
+                #     LOG.info(
+                #         f"{i} editing: {request['prompt']} -> {request['target_new']}  \n {all_metrics[i]}"
+                #     )
             # case_result_path = base_case_path / f"case_{i}.json"
 
             # Dump metrics in .json
@@ -385,7 +389,7 @@ class BaseEditor:
                 keep_original_weight=keep_original_weight,
             )
             exec_time = time() - start
-            LOG.info(f"Execution editing took {exec_time}")
+            # LOG.info(f"Execution editing took {exec_time}")
 
             start = time()
             chunk_metrics = []
@@ -407,12 +411,12 @@ class BaseEditor:
             for i, request in enumerate(record_chunks):
                 chunk_metrics[i]["pre"] = compute_edit_quality(self.model, self.model_name, self.hparams, self.tok, request, self.hparams.device, test_generation=test_generation)
 
-                if verbose:
-                    LOG.info(
-                        f"{i} editing: {request['prompt']} -> {request['target_new']}  \n {chunk_metrics[i]}"
-                    )
+                # if verbose:
+                #     LOG.info(
+                #         f"{i} editing: {request['prompt']} -> {request['target_new']}  \n {chunk_metrics[i]}"
+                #     )
 
-            LOG.info(f"Evaluation took {time() - start}")
+            # LOG.info(f"Evaluation took {time() - start}")
             all_metrics.extend(chunk_metrics)
         return all_metrics, edited_model, weights_copy
 
@@ -447,7 +451,7 @@ class BaseEditor:
                 keep_original_weight=keep_original_weight
             )
             exec_time = time() - start
-            LOG.info(f"Execution took {exec_time}")
+            # LOG.info(f"Execution took {exec_time}")
 
             start = time()
             chunk_metrics = []
@@ -469,12 +473,12 @@ class BaseEditor:
                 chunk_metrics[i]["pre"] = compute_edit_quality(self.model, self.model_name, self.hparams, self.tok, request,
                                                       self.hparams.device)
 
-                if verbose:
-                    LOG.info(
-                        f"{i} editing: {request['prompt']} -> {request['target_new']}  \n {chunk_metrics[i]}"
-                    )
-
-            LOG.info(f"Evaluation took {time() - start}")
+            #     if verbose:
+            #         LOG.info(
+            #             f"{i} editing: {request['prompt']} -> {request['target_new']}  \n {chunk_metrics[i]}"
+            #         )
+            #
+            # LOG.info(f"Evaluation took {time() - start}")
             all_metrics.extend(chunk_metrics)
         return all_metrics, edited_model, weights_copy
 
@@ -612,7 +616,7 @@ class BaseEditor:
             )
             exec_time = time() - start
 
-            LOG.info(f"Execution editing took {exec_time}")
+            # LOG.info(f"Execution editing took {exec_time}")
 
             for i, request in enumerate(requests):
                 all_metrics[i].update({
@@ -622,10 +626,10 @@ class BaseEditor:
                     "post": {}
                 })
 
-                if verbose:
-                    LOG.info(
-                        f"{i} editing: {request['prompt']} -> {request['target_new']}  \n {all_metrics[i]}"
-                    )
+                # if verbose:
+                #     LOG.info(
+                #         f"{i} editing: {request['prompt']} -> {request['target_new']}  \n {all_metrics[i]}"
+                #     )
             return all_metrics, edited_model, weights_copy
 
         all_metrics = []
@@ -659,7 +663,7 @@ class BaseEditor:
                     train_ds=kwargs['train_ds']
                 )
                 exec_time = time() - start
-                LOG.info(f"Execution {i} editing took {exec_time}")
+                # LOG.info(f"Execution {i} editing took {exec_time}")
                 start = time()
                 all_metrics[i].update({
                     'case_id': i,
@@ -670,12 +674,12 @@ class BaseEditor:
                 })
                 all_metrics[i]['pre'].pop('locality')
 
-                LOG.info(f"Evaluation took {time() - start}")
+                # LOG.info(f"Evaluation took {time() - start}")
 
-                if verbose:
-                    LOG.info(
-                        f"{i} editing: {request['prompt']} -> {request['target_new']}  \n {all_metrics[i]}"
-                    )
+                # if verbose:
+                #     LOG.info(
+                #         f"{i} editing: {request['prompt']} -> {request['target_new']}  \n {all_metrics[i]}"
+                #     )
 
             else:
                 edited_model, weights_copy = self.apply_algo(
@@ -689,8 +693,7 @@ class BaseEditor:
                     train_ds=kwargs['train_ds'] if self.alg_name == 'IKE' else None
                 )
                 exec_time = time() - start
-                LOG.info(f"Execution {i} editing took {exec_time}")
-
+                # LOG.info(f"Execution {i} editing took {exec_time}")
                 start = time()
                 all_metrics[i].update({
                     'case_id': i,
@@ -719,12 +722,12 @@ class BaseEditor:
                         all_metrics[i]['post']['locality'].pop(f'{locality_key}_output')
                     all_metrics[i]['pre'].pop('locality')
 
-                LOG.info(f"Evaluation took {time() - start}")
+                # LOG.info(f"Evaluation took {time() - start}")
 
-                if verbose:
-                    LOG.info(
-                        f"{i} editing: {request['prompt']} -> {request['target_new']}  \n {all_metrics[i]}"
-                    )
+                # if verbose:
+                #     LOG.info(
+                #         f"{i} editing: {request['prompt']} -> {request['target_new']}  \n {all_metrics[i]}"
+                #     )
             # case_result_path = base_case_path / f"case_{i}.json"
 
             # Dump metrics in .json
@@ -772,7 +775,7 @@ class BaseEditor:
             keep_original_weight=keep_original_weight,
         )
         exec_time = time() - start
-        LOG.info(f"Execution editing took {exec_time}")
+        # LOG.info(f"Execution editing took {exec_time}")
 
         with torch.no_grad():
             for k, v in weights_copy.items():
