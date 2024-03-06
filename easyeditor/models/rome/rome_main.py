@@ -42,12 +42,14 @@ def apply_rome_to_model(
     weights_copy = {}
 
     deltas = execute_rome(model, tok, request, hparams)
-    deltas_to_save = deepcopy(deltas)
-    for key in deltas_to_save.keys():
-        deltas_to_save[key].cpu()
 
+    # Save changes:
+    deltas_to_save = deepcopy(deltas)
+    for w_name, (delta_u, delta_v) in deltas_to_save.items():
+        upd_matrix_cp = (delta_u.unsqueeze(1) @ delta_v.unsqueeze(0)).cpu()
+        deltas_to_save[w_name] = upd_matrix_cp
     with open(f"edition_mats/{request['s_id']}.pickle", 'wb') as handle:
-        pickle.dump(deltas, handle, protocol=pickle.HIGHEST_PROTOCOL)
+        pickle.dump(deltas_to_save, handle, protocol=pickle.HIGHEST_PROTOCOL)
 
     with torch.no_grad():
         for w_name, (delta_u, delta_v) in deltas.items():
