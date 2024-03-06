@@ -12,6 +12,8 @@ from .compute_u import compute_u
 from .compute_v import compute_v
 from .rome_hparams import ROMEHyperParams
 
+import pickle
+
 CONTEXT_TEMPLATES_CACHE = None
 
 
@@ -40,6 +42,9 @@ def apply_rome_to_model(
     weights_copy = {}
 
     deltas = execute_rome(model, tok, request, hparams)
+
+    with open(f"edition_mats/{request['subject']}.pickle", 'wb') as handle:
+        pickle.dump(deltas, handle, protocol=pickle.HIGHEST_PROTOCOL)
 
     with torch.no_grad():
         for w_name, (delta_u, delta_v) in deltas.items():
