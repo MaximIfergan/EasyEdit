@@ -126,6 +126,7 @@ class BaseEditor:
             self.model, self.tok = self.model_name
 
         if hparams.model_parallel:
+            print(self.model.device)
             hparams.device = str(self.model.device).split(":")[1]
         if not hparams.model_parallel and hasattr(hparams, 'device'):
             self.model.to(f'cuda:{hparams.device}')
