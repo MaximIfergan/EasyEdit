@@ -47,7 +47,9 @@ def apply_rome_to_model(
     deltas_to_save = deepcopy(deltas)
     for w_name, (delta_u, delta_v) in deltas_to_save.items():
         deltas_to_save[w_name] = (delta_u.cpu(), delta_v.cpu())
-    with open(f"edition_mats/{request['s_id']}.pickle", 'wb') as handle:
+    outdir = f"edition_mats/bloom_{request['s_id']}.pickle" if 'bloom' in model.__class__.__name__.lower() else \
+        f"edition_mats/qwen_{request['s_id']}.pickle"
+    with open(outdir, 'wb') as handle:
         pickle.dump(deltas_to_save, handle, protocol=pickle.HIGHEST_PROTOCOL)
 
     with torch.no_grad():
