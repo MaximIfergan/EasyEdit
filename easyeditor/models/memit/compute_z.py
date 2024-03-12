@@ -100,6 +100,8 @@ def compute_z(
                 # Initial value is recorded for the clean sentence
                 target_init = cur_out[0][0, lookup_idxs[0]].detach().clone()
 
+            cur_out.to(f"cuda:{hparams.device}")
+
             # Add intervened delta
             for i, idx in enumerate(lookup_idxs):
 
