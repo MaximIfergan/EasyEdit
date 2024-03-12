@@ -36,10 +36,7 @@ def compute_z(
     print("Computing right vector (v)")
 
     # Tokenize target into list of int token IDs
-    # target_ids = tok(request["target_new"], return_tensors="pt").to(f"cuda:{hparams.device}")[
-    #     "input_ids"
-    # ][0]
-    target_ids = tok(request["target_new"], return_tensors="pt").to(f"cuda")[
+    target_ids = tok(request["target_new"], return_tensors="pt").to(f"cuda:{hparams.device}")[
         "input_ids"
     ][0]
 
@@ -53,24 +50,17 @@ def compute_z(
     ], ["{} is a"]
     all_prompts = rewriting_prompts + kl_prompts
 
-    # input_tok = tok(
-    #     [prompt.format(request["subject"]) for prompt in all_prompts],
-    #     return_tensors="pt",
-    #     padding=True,
-    # ).to(f"cuda:{hparams.device}")
     input_tok = tok(
         [prompt.format(request["subject"]) for prompt in all_prompts],
         return_tensors="pt",
         padding=True,
-    ).to(f"cuda")
+    ).to(f"cuda:{hparams.device}")
 
     # Compute rewriting targets
-    # rewriting_targets = torch.tensor(-100, device=f"cuda:{hparams.device}").repeat(
-    #     len(rewriting_prompts), *input_tok["input_ids"].shape[1:]
-    # )
-    rewriting_targets = torch.tensor(-100, device=f"cuda").repeat(
+    rewriting_targets = torch.tensor(-100, device=f"cuda:{hparams.device}").repeat(
         len(rewriting_prompts), *input_tok["input_ids"].shape[1:]
     )
+
     for i in range(len(rewriting_prompts)):
         ex_len = input_tok["attention_mask"][i].sum()
         rewriting_targets[i, ex_len - len(target_ids) : ex_len] = target_ids
@@ -92,11 +82,9 @@ def compute_z(
     # rewrite layer, i.e. hypothesized fact lookup location, will induce the
     # target token to be predicted at the final layer.
     if hasattr(model.config, 'n_embd'):
-        # delta = torch.zeros((model.config.n_embd,), requires_grad=True, device=f"cuda:{hparams.device}")
-        delta = torch.zeros((model.config.n_embd,), requires_grad=True, device=f"cuda")
+        delta = torch.zeros((model.config.n_embd,), requires_grad=True, device=f"cuda:{hparams.device}")
     elif hasattr(model.config, 'hidden_size'):
-        # delta = torch.zeros((model.config.hidden_size,), requires_grad=True, device=f"cuda:{hparams.device}")
-        delta = torch.zeros((model.config.hidden_size,), requires_grad=True, device=f"cuda")
+        delta = torch.zeros((model.config.hidden_size,), requires_grad=True, device=f"cuda:{hparams.device}")
     else:
         raise NotImplementedError
     target_init, kl_distr_init = None, None
