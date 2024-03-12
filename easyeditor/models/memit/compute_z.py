@@ -65,7 +65,10 @@ def compute_z(
     ).to(f"cuda")
 
     # Compute rewriting targets
-    rewriting_targets = torch.tensor(-100, device=f"cuda:{hparams.device}").repeat(
+    # rewriting_targets = torch.tensor(-100, device=f"cuda:{hparams.device}").repeat(
+    #     len(rewriting_prompts), *input_tok["input_ids"].shape[1:]
+    # )
+    rewriting_targets = torch.tensor(-100, device=f"cuda").repeat(
         len(rewriting_prompts), *input_tok["input_ids"].shape[1:]
     )
     for i in range(len(rewriting_prompts)):
