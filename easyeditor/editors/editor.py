@@ -22,9 +22,6 @@ from ..util import nethook
 from ..util.hparams import HyperParams
 from ..util.alg_dict import *
 
-os.environ['CUDA_VISIBLE_DEVICES'] = '0'
-
-
 logging.basicConfig(format = '%(asctime)s - %(levelname)s - %(name)s -   %(message)s',
                     datefmt = '%m/%d/%Y %H:%M:%S',
                     level = logging.INFO)
