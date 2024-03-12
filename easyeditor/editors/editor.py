@@ -22,6 +22,9 @@ from ..util import nethook
 from ..util.hparams import HyperParams
 from ..util.alg_dict import *
 
+os.environ['CUDA_VISIBLE_DEVICES'] = '0'
+
+
 logging.basicConfig(format = '%(asctime)s - %(levelname)s - %(name)s -   %(message)s',
                     datefmt = '%m/%d/%Y %H:%M:%S',
                     level = logging.INFO)
@@ -127,8 +130,6 @@ class BaseEditor:
 
         if hparams.model_parallel:
             hparams.device = str(self.model.device).split(":")[1]
-            print("hparams.device:")
-            print(hparams.device)
         if not hparams.model_parallel and hasattr(hparams, 'device'):
             self.model.to(f'cuda:{hparams.device}')
         print("finish init")
