@@ -36,7 +36,10 @@ def compute_z(
     print("Computing right vector (v)")
 
     # Tokenize target into list of int token IDs
-    target_ids = tok(request["target_new"], return_tensors="pt").to(f"cuda:{hparams.device}")[
+    # target_ids = tok(request["target_new"], return_tensors="pt").to(f"cuda:{hparams.device}")[
+    #     "input_ids"
+    # ][0]
+    target_ids = tok(request["target_new"], return_tensors="pt").to(f"cuda")[
         "input_ids"
     ][0]
 
@@ -50,11 +53,16 @@ def compute_z(
     ], ["{} is a"]
     all_prompts = rewriting_prompts + kl_prompts
 
+    # input_tok = tok(
+    #     [prompt.format(request["subject"]) for prompt in all_prompts],
+    #     return_tensors="pt",
+    #     padding=True,
+    # ).to(f"cuda:{hparams.device}")
     input_tok = tok(
         [prompt.format(request["subject"]) for prompt in all_prompts],
         return_tensors="pt",
         padding=True,
-    ).to(f"cuda:{hparams.device}")
+    ).to(f"cuda")
 
     # Compute rewriting targets
     rewriting_targets = torch.tensor(-100, device=f"cuda:{hparams.device}").repeat(
