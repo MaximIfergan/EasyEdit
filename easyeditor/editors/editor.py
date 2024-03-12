@@ -127,7 +127,7 @@ class BaseEditor:
 
         if hparams.model_parallel:
             # hparams.device = str(self.model.device).split(":")[1]
-            hparams.device = 'cuda'
+            hparams.device = str(self.model.device).split(":")[0]
         if not hparams.model_parallel and hasattr(hparams, 'device'):
             self.model.to(f'cuda:{hparams.device}')
         print("finish init")
