@@ -86,7 +86,7 @@ def compute_z(
     elif hasattr(model.config, 'hidden_size'):
         delta = torch.zeros((model.config.hidden_size,), requires_grad=True,
                             # device=f"cuda:{hparams.device}",
-                            device=f"cuda:1",
+                            device=f"cuda",
                             )
     else:
         raise NotImplementedError
@@ -117,7 +117,7 @@ def compute_z(
                     # print("cur_out[0][i, idx, :].get_device()")
                     # print(cur_out[0][i, idx, :].get_device())
                     cur_out[0][i, idx, :] += delta
-        print("ok")
+
         return cur_out
 
     # Optimizer
