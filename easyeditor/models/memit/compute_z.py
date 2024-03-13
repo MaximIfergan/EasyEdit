@@ -106,14 +106,17 @@ def compute_z(
                 if len(lookup_idxs)!=len(cur_out[0]):
                     cur_out[0][idx, i, :] += delta
                 else:
-                    print("cur_out[0][i, idx, :].get_device()")
-                    print(cur_out[0][i, idx, :].get_device())
-                    print("delta.get_device()")
-                    print(delta.get_device())
-                    cur_out[0].to(f"cuda:{delta.get_device()}")
-                    print("cur_out[0][i, idx, :].get_device()")
-                    print(cur_out[0][i, idx, :].get_device())
-                    cur_out[0][i, idx, :] += delta
+                    # print("cur_out[0][i, idx, :].get_device()")
+                    # print(cur_out[0][i, idx, :].get_device())
+                    # print("delta.get_device()")
+                    # print(delta.get_device())
+                    # cur_out[0].to(f"cuda:{delta.get_device()}")
+                    # print("cur_out[0][i, idx, :].get_device()")
+                    # print(cur_out[0][i, idx, :].get_device())
+                    cur_out[0].cpu()
+                    cur_out[0][i, idx, :] += delta.cpu()
+                    cur_out[0].cuda()
+                    delta.cuda()
 
         return cur_out
 
