@@ -103,6 +103,11 @@ def compute_z(
             # Add intervened delta
             for i, idx in enumerate(lookup_idxs):
 
+                print("cur_out[0].get_device()")
+                print(cur_out[0].get_device())
+                print("delta.get_device()")
+                print(delta.get_device())
+
                 if len(lookup_idxs)!=len(cur_out[0]):
                     cur_out[0][idx, i, :] += delta
                 else:
