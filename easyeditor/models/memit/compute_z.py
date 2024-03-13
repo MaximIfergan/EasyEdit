@@ -117,7 +117,7 @@ def compute_z(
                     # print("cur_out[0][i, idx, :].get_device()")
                     # print(cur_out[0][i, idx, :].get_device())
                     cur_out[0][i, idx, :] += delta
-
+        print("ok")
         return cur_out
 
     # Optimizer
