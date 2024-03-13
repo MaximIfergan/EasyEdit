@@ -116,7 +116,7 @@ def compute_z(
                     # cur_out[0].to(f"cuda:{delta.get_device()}")
                     # print("cur_out[0][i, idx, :].get_device()")
                     # print(cur_out[0][i, idx, :].get_device())
-                    cur_out[0][i, idx, :] += delta
+                    cur_out[0][i, idx, :] += delta.cuda()
 
         return cur_out
 
