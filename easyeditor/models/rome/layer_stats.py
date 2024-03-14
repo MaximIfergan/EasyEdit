@@ -125,8 +125,8 @@ def layer_stats(
         return TokenizedDataset(raw_ds["train"], tokenizer, maxlen=maxlen)
 
     # Continue with computation of statistics
-    batch_size = 100  # Examine this many dataset texts at once
-    # batch_size = 1  # Examine this many dataset texts at once  # TODO delete for debug
+    # batch_size = 100  # Examine this many dataset texts at once
+    batch_size = 20  # Examine this many dataset texts at once  # TODO delete for debug
 
     if hasattr(model.config, 'n_positions'):
         npos = model.config.n_positions
@@ -183,15 +183,19 @@ def layer_stats(
     with torch.no_grad():
         for batch_group in progress(loader, total=batch_count):
             for batch in batch_group:
-                batch = dict_to_(batch, f"cuda:{hparams.device}")
-                with Trace(
-                    model, layer_name, retain_input=True, retain_output=False, stop=True
-                ) as tr:
-                    model(**batch)
-                feats = flatten_masked_batch(tr.input, batch["attention_mask"])
-                # feats = flatten_masked_batch(tr.output, batch["attention_mask"])
-                feats = feats.to(dtype=dtype)
-                stat.add(feats)
+                try:
+                    batch = dict_to_(batch, f"cuda:{hparams.device}")
+                    with Trace(
+                        model, layer_name, retain_input=True, retain_output=False, stop=True
+                    ) as tr:
+                        model(**batch)
+                    feats = flatten_masked_batch(tr.input, batch["attention_mask"])
+                    # feats = flatten_masked_batch(tr.output, batch["attention_mask"])
+                    feats = feats.to(dtype=dtype)
+                    stat.add(feats)
+                except torch.cuda.OutOfMemoryError:
+                    logging.error(f"torch.cuda.OutOfMemoryError")
+                    continue
     return stat
 
 
