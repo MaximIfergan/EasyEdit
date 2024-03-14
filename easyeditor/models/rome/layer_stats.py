@@ -180,8 +180,11 @@ def layer_stats(
         num_workers=2,
     )
     batch_count = -(-(sample_size or len(ds)) // batch_size)
+    i = 0
     with torch.no_grad():
         for batch_group in progress(loader, total=batch_count):
+            if i >= 10:
+                return stat
             for batch in batch_group:
                 # try:
                 batch = dict_to_(batch, f"cuda:{hparams.device}")
@@ -196,6 +199,7 @@ def layer_stats(
                 # except torch.cuda.OutOfMemoryError:
                 #     logging.error(f"torch.cuda.OutOfMemoryError")
                 #     continue
+            i += 1
     return stat
 
 
