@@ -183,7 +183,7 @@ def layer_stats(
     i = 0
     with torch.no_grad():
         for batch_group in progress(loader, total=batch_count):
-            if i >= 5:
+            if i >= 2:
                 return stat
             for batch in batch_group:
                 # try:
