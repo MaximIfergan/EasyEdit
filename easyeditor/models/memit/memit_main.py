@@ -22,6 +22,7 @@ CONTEXT_TEMPLATES_CACHE = None
 if os.path.isfile("MEMIT_COV_STATS.pickle"):
     with open("MEMIT_COV_STATS.pickle", 'rb') as f:
         COV_CACHE = pickle.load(f)
+    print("Load MEMIT_COV_STATS.pickle suc")
 else:
     COV_CACHE = {}
 
