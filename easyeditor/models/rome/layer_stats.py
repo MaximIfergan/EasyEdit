@@ -135,12 +135,12 @@ def layer_stats(
         npos = model.config.max_sequence_length
     elif hasattr(model.config, 'max_position_embeddings'):
         npos = model.config.max_position_embeddings
-    elif hasattr(model.config,'seq_length'):
+    elif hasattr(model.config, 'seq_length'):
         npos = model.config.seq_length
     else:
         raise NotImplementedError
         
-    if hasattr(model.config, 'model_type') and 'mistral' in model.config.model_type:
+    if hasattr(model.config, 'model_type') and ('mistral' in model.config.model_type or 'bloom' in model.config.model_type):
         if hasattr(model.config, 'sliding_window') and model.config.sliding_window:
             npos = model.config.sliding_window or 4096
         else:

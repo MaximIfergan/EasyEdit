@@ -116,10 +116,6 @@ class BaseEditor:
             else:
                 raise NotImplementedError
 
-            # for name, param in self.model.named_parameters():
-            #     print(name)
-            # exit(0)
-
             if self.tok is not None and (isinstance(self.tok, GPT2Tokenizer) or isinstance(self.tok, GPT2TokenizerFast) or isinstance(self.tok, LlamaTokenizer)) and (hparams.alg_name not in ['ROME', 'MEMIT']):
                 # LOG.info('AutoRegressive Model detected, set the padding side of Tokenizer to left...')
                 self.tok.padding_side = 'left'
