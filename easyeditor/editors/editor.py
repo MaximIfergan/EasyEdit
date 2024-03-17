@@ -113,11 +113,12 @@ class BaseEditor:
                                                                   torch_dtype=torch.float16, trust_remote_code=True)
                 self.tok = AutoTokenizer.from_pretrained(self.model_name, use_fast=False, padding_side="left",
                                                          trust_remote_code=True)
-                for name, param in self.model.named_parameters():
-                    print(name)
-                exit(0)
             else:
                 raise NotImplementedError
+
+            for name, param in self.model.named_parameters():
+                print(name)
+            exit(0)
 
             if self.tok is not None and (isinstance(self.tok, GPT2Tokenizer) or isinstance(self.tok, GPT2TokenizerFast) or isinstance(self.tok, LlamaTokenizer)) and (hparams.alg_name not in ['ROME', 'MEMIT']):
                 # LOG.info('AutoRegressive Model detected, set the padding side of Tokenizer to left...')
