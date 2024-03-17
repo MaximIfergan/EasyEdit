@@ -19,7 +19,11 @@ from .memit_hparams import MEMITHyperParams
 
 # Cache variable(s)
 CONTEXT_TEMPLATES_CACHE = None
-COV_CACHE = {}
+if os.path.isfile("MEMIT_COV_STATS.pickle"):
+    with open("MEMIT_COV_STATS.pickle", 'rb') as f:
+        COV_CACHE = pickle.load(f)
+else:
+    COV_CACHE = {}
 
 
 def apply_memit_to_model(
@@ -265,9 +269,6 @@ def get_cov(
     model_name = model.config._name_or_path.replace("/", "_")
     key = (model_name, layer_name)
 
-    # with open("MEMIT_COV_STATS.pickle", 'rb') as f:
-        # COV_CACHE = pickle.load(f)
-
     print(f"Retrieving covariance statistics for {model_name} @ {layer_name}.")
     if key not in COV_CACHE or force_recompute:
         stat = layer_stats(
@@ -284,9 +285,9 @@ def get_cov(
         )
         COV_CACHE[key] = stat.mom2.moment().float().to("cpu")
 
-    # Save changes:
-    with open("MEMIT_COV_STATS.pickle", 'wb') as handle:
-        pickle.dump(COV_CACHE, handle, protocol=pickle.HIGHEST_PROTOCOL)
+        # Save changes:
+        with open("MEMIT_COV_STATS.pickle", 'wb') as handle:
+            pickle.dump(COV_CACHE, handle, protocol=pickle.HIGHEST_PROTOCOL)
 
     return (
         torch.inverse(COV_CACHE[key].to(f"cuda:{hparams.device}")) if inv else COV_CACHE[key].to(f"cuda:{hparams.device}")
