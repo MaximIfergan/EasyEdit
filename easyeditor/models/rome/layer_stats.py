@@ -192,6 +192,7 @@ def layer_stats(
                 return stat
 
             for batch in batch_group:
+                i += 1
                 try:
                     batch = dict_to_(batch, f"cuda:{hparams.device}")
                     with Trace(
@@ -206,7 +207,6 @@ def layer_stats(
                 except torch.cuda.OutOfMemoryError:
                     logging.error(f"torch.cuda.OutOfMemoryError")
                     continue
-                i += 1
 
     logging.error(f"Total Examples {c_count * batch_size} from total {c_count / i}")
     return stat
