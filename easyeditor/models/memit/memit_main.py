@@ -265,9 +265,8 @@ def get_cov(
     model_name = model.config._name_or_path.replace("/", "_")
     key = (model_name, layer_name)
 
-    if not COV_CACHE:
-        with open("MEMIT_COV_STATS.pickle", 'rb') as f:
-            COV_CACHE = pickle.load(f)
+    # with open("MEMIT_COV_STATS.pickle", 'rb') as f:
+    #     COV_CACHE = pickle.load(f)
 
     print(f"Retrieving covariance statistics for {model_name} @ {layer_name}.")
     if key not in COV_CACHE or force_recompute:
