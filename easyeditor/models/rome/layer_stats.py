@@ -111,6 +111,8 @@ def layer_stats(
             maxlen = model.config.max_position_embeddings
         elif hasattr(model.config,'seq_length'):
             maxlen = model.config.seq_length
+        elif hasattr(model.config, 'model_type') and 'bloom' in model.config.model_type:
+            maxlen = 4096
         else:
             raise NotImplementedError
                 
