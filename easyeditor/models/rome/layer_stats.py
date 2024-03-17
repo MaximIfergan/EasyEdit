@@ -180,26 +180,30 @@ def layer_stats(
         num_workers=2,
     )
     batch_count = -(-(sample_size or len(ds)) // batch_size)
+
     i = 0
+    c_count = 0
     with torch.no_grad():
         for batch_group in progress(loader, total=batch_count):
             if i >= 2:
                 return stat
             for batch in batch_group:
-                # try:
-                batch = dict_to_(batch, f"cuda:{hparams.device}")
-                with Trace(
-                    model, layer_name, retain_input=True, retain_output=False, stop=True
-                ) as tr:
-                    model(**batch)
-                feats = flatten_masked_batch(tr.input, batch["attention_mask"])
-                # feats = flatten_masked_batch(tr.output, batch["attention_mask"])
-                feats = feats.to(dtype=dtype)
-                stat.add(feats)
-                # except torch.cuda.OutOfMemoryError:
-                #     logging.error(f"torch.cuda.OutOfMemoryError")
-                #     continue
-            i += 1
+                try:
+                    batch = dict_to_(batch, f"cuda:{hparams.device}")
+                    with Trace(
+                        model, layer_name, retain_input=True, retain_output=False, stop=True
+                    ) as tr:
+                        model(**batch)
+                    feats = flatten_masked_batch(tr.input, batch["attention_mask"])
+                    # feats = flatten_masked_batch(tr.output, batch["attention_mask"])
+                    feats = feats.to(dtype=dtype)
+                    stat.add(feats)
+                    c_count += 1
+                except torch.cuda.OutOfMemoryError:
+                    logging.error(f"torch.cuda.OutOfMemoryError")
+                    continue
+                i += 1
+    print(f"Total Examples {c_count * batch_size} from total {c_count / i}")
     return stat
 
 
