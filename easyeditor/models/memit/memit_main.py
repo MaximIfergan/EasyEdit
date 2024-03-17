@@ -1,4 +1,5 @@
 import os
+import pickle
 from copy import deepcopy
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
@@ -264,6 +265,10 @@ def get_cov(
     model_name = model.config._name_or_path.replace("/", "_")
     key = (model_name, layer_name)
 
+    if not COV_CACHE:
+        with open("MEMIT_COV_STATS.pickle", 'rb') as f:
+            COV_CACHE = pickle.load(f)
+
     print(f"Retrieving covariance statistics for {model_name} @ {layer_name}.")
     if key not in COV_CACHE or force_recompute:
         stat = layer_stats(
@@ -279,6 +284,10 @@ def get_cov(
             force_recompute=force_recompute,
         )
         COV_CACHE[key] = stat.mom2.moment().float().to("cpu")
+
+    # Save changes:
+    with open("MEMIT_COV_STATS.pickle", 'wb') as handle:
+        pickle.dump(COV_CACHE, handle, protocol=pickle.HIGHEST_PROTOCOL)
 
     return (
         torch.inverse(COV_CACHE[key].to(f"cuda:{hparams.device}")) if inv else COV_CACHE[key].to(f"cuda:{hparams.device}")
