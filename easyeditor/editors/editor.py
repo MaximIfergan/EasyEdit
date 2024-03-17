@@ -10,7 +10,7 @@ import numpy as np
 import random
 from ..models.melo.melo import LORA
 from transformers import AutoTokenizer, AutoModelForCausalLM, AutoModel
-from transformers import LlamaTokenizer, LlamaForCausalLM
+from transformers import LlamaTokenizer, LlamaForCausalLM, BloomForCausalLM
 from transformers import T5ForConditionalGeneration, T5Tokenizer
 from transformers import GPT2TokenizerFast, GPT2Tokenizer
 # from accelerate import Accelerator
@@ -109,16 +109,16 @@ class BaseEditor:
                 self.tok = AutoTokenizer.from_pretrained(self.model_name)
                 self.tok.pad_token_id = self.tok.eos_token_id
             elif 'bloom' in self.model_name.lower():
-                self.model = AutoModelForCausalLM.from_pretrained(self.model_name, low_cpu_mem_usage=True,
+                self.model = BloomForCausalLM.from_pretrained(self.model_name, low_cpu_mem_usage=True,
                                                                   torch_dtype=torch.float16, trust_remote_code=True)
                 self.tok = AutoTokenizer.from_pretrained(self.model_name, use_fast=False, padding_side="left",
                                                          trust_remote_code=True)
             else:
                 raise NotImplementedError
 
-            # for name, param in self.model.named_parameters():
-            #     print(name)
-            # exit(0)
+            for name, param in self.model.named_parameters():
+                print(name)
+            exit(0)
 
             if self.tok is not None and (isinstance(self.tok, GPT2Tokenizer) or isinstance(self.tok, GPT2TokenizerFast) or isinstance(self.tok, LlamaTokenizer)) and (hparams.alg_name not in ['ROME', 'MEMIT']):
                 # LOG.info('AutoRegressive Model detected, set the padding side of Tokenizer to left...')
