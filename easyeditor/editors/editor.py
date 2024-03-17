@@ -113,6 +113,9 @@ class BaseEditor:
                                                                   torch_dtype=torch.float16, trust_remote_code=True)
                 self.tok = AutoTokenizer.from_pretrained(self.model_name, use_fast=False, padding_side="left",
                                                          trust_remote_code=True)
+                for name, param in self.model.named_parameters():
+                    print(name)
+                exit(0)
             else:
                 raise NotImplementedError
 
