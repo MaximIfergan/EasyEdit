@@ -126,7 +126,8 @@ def layer_stats(
 
     # Continue with computation of statistics
     batch_size = 100  # Examine this many dataset texts at once
-    # batch_size = 20  # Examine this many dataset texts at once  # TODO delete for debug
+    if 'qwen' in model.config.model_type:
+        batch_size = 20
 
     if hasattr(model.config, 'n_positions'):
         npos = model.config.n_positions
@@ -185,8 +186,11 @@ def layer_stats(
     c_count = 0
     with torch.no_grad():
         for batch_group in progress(loader, total=batch_count):
-            if i >= 2:
+
+            if i >= 20:
+                logging.error(f"Total Examples {c_count * batch_size} from total {c_count / i}")
                 return stat
+
             for batch in batch_group:
                 try:
                     batch = dict_to_(batch, f"cuda:{hparams.device}")
@@ -203,7 +207,8 @@ def layer_stats(
                     logging.error(f"torch.cuda.OutOfMemoryError")
                     continue
                 i += 1
-    print(f"Total Examples {c_count * batch_size} from total {c_count / i}")
+
+    logging.error(f"Total Examples {c_count * batch_size} from total {c_count / i}")
     return stat
 
 
