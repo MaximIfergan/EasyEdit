@@ -9,7 +9,7 @@ fact_token: "subject_last"
 v_num_grad_steps: 25
 v_lr: 2
 v_loss_layer: 29
-v_weight_decay: 0.0015
+v_weight_decay: 0.00015
 kl_factor: 0.08
 mom2_adjustment: true
 mom2_update_weight: 15000
