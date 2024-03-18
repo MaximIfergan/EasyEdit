@@ -7,7 +7,7 @@ clamp_norm_factor: 0.75
 layer_selection: "all"
 fact_token: "subject_last"
 v_num_grad_steps: 25
-v_lr: 5
+v_lr: 2
 v_loss_layer: 29
 v_weight_decay: 0.5
 kl_factor: 0.08
