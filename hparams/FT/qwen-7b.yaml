@@ -7,10 +7,10 @@ model_name: "Qwen/Qwen-7B"
 device: 0
 
 layers: [31]
-num_steps: 25
+num_steps: 20
 batch_size: 1
 max_length: 40
-lr: 5e-3
+lr: 5e-2
 weight_decay: 0
 kl_factor: 0
 norm_constraint: 5e-5
