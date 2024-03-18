@@ -51,6 +51,14 @@ def apply_memit_to_model(
 
     deltas = execute_memit(model, tok, requests, hparams, cache_template=cache_template)
 
+    # Save changes:
+    deltas_to_save = deepcopy(deltas)
+    for w_name, (delta_u, delta_v) in deltas_to_save.items():
+        deltas_to_save[w_name] = (delta_u.cpu(), delta_v.cpu())
+    outdir = f"edition_mats/{requests[0]['s_id']}_MEMIT_{model.__class__.__name__.lower()}.pickle"
+    with open(outdir, 'wb') as handle:
+        pickle.dump(deltas_to_save, handle, protocol=pickle.HIGHEST_PROTOCOL)
+
     with torch.no_grad():
         for w_name, (key_mat, val_mat) in deltas.items():
             key_mat, val_mat = key_mat.to(f"cuda:{hparams.device}"), val_mat.to(f"cuda:{hparams.device}")
