@@ -3,7 +3,7 @@
 #   2. target_new: the standard autoregressive method, using the cross-entropy loss function
 
 alg_name: "FT"
-model_name: "./hugging_cache/qwen-7b"
+model_name: "Qwen/Qwen-7B"
 device: 0
 
 layers: [31]
