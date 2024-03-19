@@ -217,6 +217,8 @@ def execute_ft(
             if loss.item() >= 1e-2:
                 loss.backward()
                 opt.step()
+            else:
+                print("Dont update")
 
             if type(hparams.norm_constraint) is float:
                 eps = hparams.norm_constraint
