@@ -5,9 +5,8 @@
 alg_name: "FT"
 model_name: "Qwen/Qwen-7B"
 device: 0
-
-layers: [31]
-num_steps: 20
+layers: [5]
+num_steps: 25
 batch_size: 1
 max_length: 40
 lr: 5e-4
