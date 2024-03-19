@@ -111,7 +111,7 @@ class BaseEditor:
             elif 'bloom' in self.model_name.lower():
                 self.model = AutoModelForCausalLM.from_pretrained(self.model_name, low_cpu_mem_usage=True,
                                                                   torch_dtype=torch.float16, trust_remote_code=True)
-                self.tok = AutoTokenizer.from_pretrained(self.model_name, use_fast=False, padding_side="left",
+                self.tok = AutoTokenizer.from_pretrained(self.model_name, use_fast=False, padding_side="right",
                                                          trust_remote_code=True)
             else:
                 raise NotImplementedError
