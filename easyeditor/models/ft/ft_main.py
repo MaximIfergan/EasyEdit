@@ -109,12 +109,8 @@ def execute_ft(
         for txt, tgt in zip(
             chunks(texts, hparams.batch_size), chunks(targets, hparams.batch_size)
         ):
-            # inputs = tok(txt, return_tensors="pt", padding=True).to(device)
-            # target_ids = tok(tgt, return_tensors="pt", padding=True)["input_ids"].to(
-            #     device
-            # )
-            inputs = tok(txt, return_tensors="pt", padding=False).to(device)
-            target_ids = tok(tgt, return_tensors="pt", padding=False)["input_ids"].to(
+            inputs = tok(txt, return_tensors="pt", padding=True).to(device)
+            target_ids = tok(tgt, return_tensors="pt", padding=True)["input_ids"].to(
                 device
             )
             if hparams.objective_optimization == 'prompt_last':
@@ -205,7 +201,7 @@ def execute_ft(
                         1
                     ) / loss_mask.sum(1)
                 elif hparams.objective_optimization == 'target_new':
-                    logits = model(**inputs_targets).logits
+                    logits = model(**inputs_targets, end_ind=40).logits
                     shift_logits = logits[..., :-1, :].contiguous()
                     shift_labels = inputs_targets['input_ids'][..., 1:].contiguous()
                     loss_fct = CrossEntropyLoss(reduction='none')
