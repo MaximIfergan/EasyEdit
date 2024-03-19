@@ -201,7 +201,7 @@ def execute_ft(
                         1
                     ) / loss_mask.sum(1)
                 elif hparams.objective_optimization == 'target_new':
-                    logits = model(**inputs_targets, end_ind=40).logits
+                    logits = model(**inputs_targets).logits
                     shift_logits = logits[..., :-1, :].contiguous()
                     shift_labels = inputs_targets['input_ids'][..., 1:].contiguous()
                     loss_fct = CrossEntropyLoss(reduction='none')
