@@ -231,6 +231,7 @@ def execute_ft(
         print(f"Total loss {loss_meter.avg}")
 
         if loss_meter.avg < 1e-2:
+            print("Break FT")
             break
 
     deltas = {k: (weights[k] - weights_copy[k]).detach() for k in weights}
