@@ -122,7 +122,8 @@ def layer_stats(
             else:
                 maxlen = 4096
 
-        maxlen = 2048
+        if 'qwen' in model.config.model_type:
+            maxlen = 8192
 
         if batch_tokens is not None and batch_tokens < maxlen:
             maxlen = batch_tokens
@@ -145,14 +146,15 @@ def layer_stats(
         npos = 4096
     else:
         raise NotImplementedError
-        
+
     if hasattr(model.config, 'model_type') and 'mistral' in model.config.model_type:
         if hasattr(model.config, 'sliding_window') and model.config.sliding_window:
             npos = model.config.sliding_window or 4096
         else:
             npos = 4096
 
-    npos = 2048
+    if 'qwen' in model.config.model_type:
+        npos = 8192
 
     if batch_tokens is None:
         batch_tokens = npos * 3  # Sort and divide into batches with this many tokens
