@@ -122,8 +122,7 @@ def layer_stats(
             else:
                 maxlen = 4096
 
-        print("maxlen")
-        print(maxlen)
+        maxlen = 2048
 
         if batch_tokens is not None and batch_tokens < maxlen:
             maxlen = batch_tokens
@@ -153,8 +152,7 @@ def layer_stats(
         else:
             npos = 4096
 
-    print("npos")
-    print(npos)
+    npos = 2048
 
     if batch_tokens is None:
         batch_tokens = npos * 3  # Sort and divide into batches with this many tokens
