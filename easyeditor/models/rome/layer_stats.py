@@ -123,7 +123,7 @@ def layer_stats(
                 maxlen = 4096
 
         if 'qwen' in model.config.model_type:
-            maxlen = 8190
+            maxlen = 8188
 
         if batch_tokens is not None and batch_tokens < maxlen:
             maxlen = batch_tokens
@@ -154,7 +154,7 @@ def layer_stats(
             npos = 4096
 
     if 'qwen' in model.config.model_type:
-        npos = 8190
+        npos = 8188
 
     if batch_tokens is None:
         batch_tokens = npos * 3  # Sort and divide into batches with this many tokens
