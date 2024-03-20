@@ -215,7 +215,7 @@ def layer_stats(
                     stat.add(feats)
                     c_count += 1
                 except torch.cuda.OutOfMemoryError:
-                    logging.error(f"torch.cuda.OutOfMemoryError")
+                    # logging.error(f"torch.cuda.OutOfMemoryError")
                     continue
 
     logging.error(f"Total Examples {c_count * batch_size} from total {c_count / i}")
