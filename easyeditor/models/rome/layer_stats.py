@@ -123,7 +123,7 @@ def layer_stats(
                 maxlen = 4096
 
         if 'qwen' in model.config.model_type:
-            maxlen = 8188
+            maxlen = 8192
 
         if batch_tokens is not None and batch_tokens < maxlen:
             maxlen = batch_tokens
@@ -154,7 +154,7 @@ def layer_stats(
             npos = 4096
 
     if 'qwen' in model.config.model_type:
-        npos = 8188
+        npos = 8192
 
     if batch_tokens is None:
         batch_tokens = npos * 3  # Sort and divide into batches with this many tokens
@@ -197,7 +197,7 @@ def layer_stats(
     with torch.no_grad():
         for batch_group in progress(loader, total=batch_count):
 
-            if i >= 10:
+            if i >= 2800:
                 logging.error(f"Total Examples {c_count * batch_size} from total {c_count / i}")
                 return stat
 
