@@ -197,7 +197,7 @@ def layer_stats(
     with torch.no_grad():
         for batch_group in progress(loader, total=batch_count):
 
-            if i >= 2800:
+            if i >= 2000:
                 logging.error(f"Total Examples {c_count * batch_size} from total {c_count / i}")
                 return stat
 
