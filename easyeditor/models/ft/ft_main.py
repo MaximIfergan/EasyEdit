@@ -10,6 +10,10 @@ from ...util import nethook
 
 from .ft_hparams import FTHyperParams
 
+# Adjust for bloom
+import torch
+import torch.nn as nn
+import torch.optim as optim
 
 def apply_ft_to_model(
     model: AutoModelForCausalLM,
@@ -31,7 +35,10 @@ def apply_ft_to_model(
     if copy:
         model = deepcopy(model)
 
-    deltas = execute_ft(model, tok, requests, hparams)
+    if 'bloom' in hparams.model_name.lower(): # Adjust for bloom
+        deltas = bloom_ft(model, tok, requests, hparams) # Adjust for bloom
+    else:
+        deltas = execute_ft(model, tok, requests, hparams)
 
     with torch.no_grad():
         for w_name, upd_matrix in deltas.items():
@@ -192,24 +199,6 @@ def execute_ft(
                 loss_fct = CrossEntropyLoss(ignore_index=-100)
                 loss = loss_fct(shift_logits.view(-1, shift_logits.size(-1)), shift_labels.view(-1))
                 loss = loss.to(lm_logits.dtype)
-            elif 'bloom' in hparams.model_name.lower():
-                if hparams.objective_optimization == 'prompt_last':
-                    probs = torch.nn.functional.log_softmax(
-                        model(**inputs).logits[:, -1, :], dim=-1
-                    )
-                    loss = -(torch.gather(probs, 1, target_ids[:, -1].unsqueeze(-1)).squeeze(-1) * loss_mask[:,
-                                                                                                   -1]).sum(
-                        0
-                    ) / loss_mask[:, -1].sum()
-                elif hparams.objective_optimization == 'target_new':
-                    logits = model(**inputs_targets).logits
-                    shift_logits = logits[..., :-1, :].contiguous()
-                    shift_labels = inputs_targets['input_ids'][..., 1:].contiguous()
-                    loss_fct = CrossEntropyLoss(reduction='none')
-                    loss = loss_fct(shift_logits.view(-1, shift_logits.size(-1)), shift_labels.view(-1))
-                    loss = loss.view(bs, -1)
-                    loss = (loss * label_mask[:, 1:]).sum(1) / label_mask[:, 1:].sum(1)
-                    loss = loss.mean()
             else:
                 if hparams.objective_optimization == 'prompt_last':
                     probs = torch.nn.functional.log_softmax(
@@ -293,3 +282,96 @@ class AverageMeter:
         self.sum += val * n
         self.count += n
         self.avg = self.sum / self.count
+
+
+# Adjust for bloom
+def bloom_ft(model, tokenizer, requests, hparams):
+    # Extract the weights to be fine-tuned
+    weights_to_finetune = []
+    for layer_idx in hparams.layers:
+        module_name = hparams.rewrite_module_tmp.format(layer_idx)
+        module = model.get_submodule(module_name)
+        weights_to_finetune.extend(module.parameters())
+
+    # Create a copy of the original weights
+    original_weights = [param.clone() for param in weights_to_finetune]
+
+    # Prepare the input data
+    input_ids = []
+    attention_mask = []
+    target_ids = []
+    for request in requests:
+        prompt = request["prompt"]
+        target_new = request["target_new"]
+        encoded_prompt = tokenizer.encode(prompt, return_tensors="pt")
+        encoded_target = tokenizer.encode(target_new, return_tensors="pt")
+        input_ids.append(encoded_prompt)
+        attention_mask.append(torch.ones_like(encoded_prompt))
+        target_ids.append(encoded_target)
+
+    input_ids = torch.cat(input_ids, dim=0)
+    attention_mask = torch.cat(attention_mask, dim=0)
+    target_ids = torch.cat(target_ids, dim=0)
+
+    # Set up the optimizer
+    optimizer = optim.Adam(weights_to_finetune, lr=hparams.lr, weight_decay=hparams.weight_decay)
+
+    device = torch.device(hparams.device)
+    model.to(device)
+    input_ids = input_ids.to(device)
+    attention_mask = attention_mask.to(device)
+    target_ids = target_ids.to(device)
+
+    # Fine-tuning loop
+    for step in range(hparams.num_steps):
+        # Divide the input data into batches
+        batch_indices = torch.arange(0, input_ids.size(0), hparams.batch_size)
+        for batch_start in batch_indices:
+            batch_end = min(batch_start + hparams.batch_size, input_ids.size(0))
+            batch_input_ids = input_ids[batch_start:batch_end]
+            batch_attention_mask = attention_mask[batch_start:batch_end]
+            batch_target_ids = target_ids[batch_start:batch_end]
+
+            # Forward pass
+            outputs = model(batch_input_ids, attention_mask=batch_attention_mask)
+            logits = outputs.logits
+
+            # Calculate the loss based on the optimization objective
+            if hparams.objective_optimization == "prompt_last":
+                last_token_logits = logits[:, -1, :]
+                last_token_probs = torch.softmax(last_token_logits, dim=-1)
+                last_token_target = batch_target_ids[:, -1]
+                loss = -torch.log(last_token_probs.gather(1, last_token_target.unsqueeze(1)))
+                loss = loss.masked_select(last_token_target != tokenizer.pad_token_id).sum()
+            elif hparams.objective_optimization == "target_new":
+                shifted_logits = logits[:, :-1, :].contiguous()
+                shifted_targets = batch_target_ids[:, 1:].contiguous()
+                loss_fct = nn.CrossEntropyLoss(reduction="none")
+                loss = loss_fct(shifted_logits.view(-1, shifted_logits.size(-1)), shifted_targets.view(-1))
+                loss = loss.view(shifted_targets.size())
+                loss = loss.masked_select(shifted_targets != tokenizer.pad_token_id).mean()
+            else:
+                raise ValueError(f"Invalid optimization objective: {hparams.objective_optimization}")
+
+            # Backward pass and optimization
+            optimizer.zero_grad()
+            loss.backward()
+            optimizer.step()
+
+            # Apply norm constraint if specified
+            if hparams.norm_constraint is not None:
+                torch.nn.utils.clip_grad_norm_(weights_to_finetune, hparams.norm_constraint)
+
+        # Print progress
+        print(f"Step {step + 1}/{hparams.num_steps}, Loss: {loss.item():.4f}")
+
+    # Compute the deltas
+    deltas = {}
+    for param, original_param in zip(weights_to_finetune, original_weights):
+        deltas[param] = param.data - original_param.data
+
+    # Restore the original weights
+    for param, original_param in zip(weights_to_finetune, original_weights):
+        param.data.copy_(original_param.data)
+
+    return deltas
