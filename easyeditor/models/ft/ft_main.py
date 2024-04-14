@@ -309,28 +309,27 @@ def bloom_ft(model, tokenizer, requests, hparams):
         attention_mask.append(torch.ones_like(encoded_prompt))
         target_ids.append(encoded_target)
 
-    input_ids = torch.cat(input_ids, dim=0)
-    attention_mask = torch.cat(attention_mask, dim=0)
-    target_ids = torch.cat(target_ids, dim=0)
-
     # Set up the optimizer
     optimizer = optim.Adam(weights_to_finetune, lr=hparams.lr, weight_decay=hparams.weight_decay)
 
     device = torch.device(hparams.device)
     model.to(device)
-    input_ids = input_ids.to(device)
-    attention_mask = attention_mask.to(device)
-    target_ids = target_ids.to(device)
 
     # Fine-tuning loop
     for step in range(hparams.num_steps):
+        # Shuffle the input data
+        indices = torch.randperm(len(input_ids))
+        input_ids = [input_ids[i] for i in indices]
+        attention_mask = [attention_mask[i] for i in indices]
+        target_ids = [target_ids[i] for i in indices]
+
         # Divide the input data into batches
-        batch_indices = torch.arange(0, input_ids.size(0), hparams.batch_size)
+        batch_indices = torch.arange(0, len(input_ids), hparams.batch_size)
         for batch_start in batch_indices:
-            batch_end = min(batch_start + hparams.batch_size, input_ids.size(0))
-            batch_input_ids = input_ids[batch_start:batch_end]
-            batch_attention_mask = attention_mask[batch_start:batch_end]
-            batch_target_ids = target_ids[batch_start:batch_end]
+            batch_end = min(batch_start + hparams.batch_size, len(input_ids))
+            batch_input_ids = torch.cat(input_ids[batch_start:batch_end], dim=0).to(device)
+            batch_attention_mask = torch.cat(attention_mask[batch_start:batch_end], dim=0).to(device)
+            batch_target_ids = torch.cat(target_ids[batch_start:batch_end], dim=0).to(device)
 
             # Forward pass
             outputs = model(batch_input_ids, attention_mask=batch_attention_mask)
