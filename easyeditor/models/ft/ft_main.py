@@ -305,9 +305,9 @@ def bloom_ft(model, tokenizer, requests, hparams):
         target_new = request["target_new"]
         encoded_prompt = tokenizer.encode(prompt, return_tensors="pt")
         encoded_target = tokenizer.encode(target_new, return_tensors="pt")
-        input_ids.append(encoded_prompt)
-        attention_mask.append(torch.ones_like(encoded_prompt))
-        target_ids.append(encoded_target)
+        input_ids.append(encoded_prompt.squeeze(0))
+        attention_mask.append(torch.ones_like(encoded_prompt.squeeze(0)))
+        target_ids.append(encoded_target.squeeze(0))
 
     # Set up the optimizer
     optimizer = optim.Adam(weights_to_finetune, lr=hparams.lr, weight_decay=hparams.weight_decay)
