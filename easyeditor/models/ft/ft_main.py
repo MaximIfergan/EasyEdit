@@ -327,9 +327,9 @@ def bloom_ft(model, tokenizer, requests, hparams):
         batch_indices = torch.arange(0, len(input_ids), hparams.batch_size)
         for batch_start in batch_indices:
             batch_end = min(batch_start + hparams.batch_size, len(input_ids))
-            batch_input_ids = torch.cat(input_ids[batch_start:batch_end], dim=0).to(device)
-            batch_attention_mask = torch.cat(attention_mask[batch_start:batch_end], dim=0).to(device)
-            batch_target_ids = torch.cat(target_ids[batch_start:batch_end], dim=0).to(device)
+            batch_input_ids = nn.utils.rnn.pad_sequence(input_ids[batch_start:batch_end], batch_first=True, padding_value=tokenizer.pad_token_id).to(device)
+            batch_attention_mask = nn.utils.rnn.pad_sequence(attention_mask[batch_start:batch_end], batch_first=True, padding_value=0).to(device)
+            batch_target_ids = nn.utils.rnn.pad_sequence(target_ids[batch_start:batch_end], batch_first=True, padding_value=tokenizer.pad_token_id).to(device)
 
             # Forward pass
             outputs = model(batch_input_ids, attention_mask=batch_attention_mask)
@@ -337,9 +337,9 @@ def bloom_ft(model, tokenizer, requests, hparams):
 
             # Calculate the loss based on the optimization objective
             if hparams.objective_optimization == "prompt_last":
-                last_token_logits = logits[:, -1, :]
+                last_token_logits = logits[torch.arange(logits.size(0)), batch_attention_mask.sum(1) - 1, :]
                 last_token_probs = torch.softmax(last_token_logits, dim=-1)
-                last_token_target = batch_target_ids[:, -1]
+                last_token_target = batch_target_ids[torch.arange(batch_target_ids.size(0)), batch_attention_mask.sum(1) - 1]
                 loss = -torch.log(last_token_probs.gather(1, last_token_target.unsqueeze(1)))
                 loss = loss.masked_select(last_token_target != tokenizer.pad_token_id).sum()
             elif hparams.objective_optimization == "target_new":
