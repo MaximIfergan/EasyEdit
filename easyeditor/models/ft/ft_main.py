@@ -192,6 +192,22 @@ def execute_ft(
                 loss_fct = CrossEntropyLoss(ignore_index=-100)
                 loss = loss_fct(shift_logits.view(-1, shift_logits.size(-1)), shift_labels.view(-1))
                 loss = loss.to(lm_logits.dtype)
+            elif 'bloom' in hparams.model_name.lower():
+                if hparams.objective_optimization == 'prompt_last':
+                    seq_len = inputs["input_ids"].size(1)
+                    end_ind = seq_len  # Set end_ind to seq_len for BLOOM model
+                    logits = model(**inputs).logits
+                    probs = torch.nn.functional.log_softmax(logits[torch.arange(bs), end_ind - 1], dim=-1)
+                    loss = -(torch.gather(probs, 1, target_ids[:, -1].unsqueeze(-1)).squeeze() * loss_mask[:,-1]).mean()
+                elif hparams.objective_optimization == 'target_new':
+                    logits = model(**inputs_targets).logits
+                    shift_logits = logits[..., :-1, :].contiguous()
+                    shift_labels = inputs_targets['input_ids'][..., 1:].contiguous()
+                    loss_fct = CrossEntropyLoss(reduction='none')
+                    loss = loss_fct(shift_logits.view(-1, shift_logits.size(-1)), shift_labels.view(-1))
+                    loss = loss.view(bs, -1)
+                    loss = (loss * label_mask[:,1:]).sum(1) / label_mask[:,1:].sum(1)
+                    loss = loss.mean()
             else:
                 if hparams.objective_optimization == 'prompt_last':
                     probs = torch.nn.functional.log_softmax(
