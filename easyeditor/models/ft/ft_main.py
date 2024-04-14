@@ -230,6 +230,9 @@ def execute_ft(
 
             if loss.item() >= 1e-2:
                 loss.backward()
+
+                torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
+
                 opt.step()
             else:
                 print("Dont update")
