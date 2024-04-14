@@ -35,10 +35,7 @@ def apply_ft_to_model(
     if copy:
         model = deepcopy(model)
 
-    if 'bloom' in hparams.model_name.lower(): # Adjust for bloom
-        deltas = bloom_ft(model, tok, requests, hparams) # Adjust for bloom
-    else:
-        deltas = execute_ft(model, tok, requests, hparams)
+    deltas = execute_ft(model, tok, requests, hparams)
 
     with torch.no_grad():
         for w_name, upd_matrix in deltas.items():
@@ -282,88 +279,3 @@ class AverageMeter:
         self.sum += val * n
         self.count += n
         self.avg = self.sum / self.count
-
-
-# Adjust for bloom
-def bloom_ft(model, tokenizer, requests, hparams):
-    # 1. Extract necessary weights
-    target_weights = []
-    for layer_idx in hparams.layers:
-        module_name = hparams.rewrite_module_tmp.format(layer_idx)
-        target_weights.append(getattr(model, module_name).weight.detach().clone())
-
-    # 2. Input Preparation
-    input_ids = tokenizer([req['prompt'] for req in requests], return_tensors='pt', padding=True)
-    labels = tokenizer([req['target_new'] for req in requests], return_tensors='pt', padding=True)
-
-    # 3. Set up optimizer, track gradients
-    optimizer = torch.optim.Adam(
-        [p for p in model.parameters() if p.requires_grad],
-        lr=hparams.lr,
-        weight_decay=hparams.weight_decay
-    )
-    model.train()  # Set model in training mode
-
-    # 4. Fine-tuning Loop
-    for step in range(hparams.num_steps):
-        for batch_start in range(0, input_ids['input_ids'].size(0), hparams.batch_size):
-            batch = {k: v[batch_start: batch_start + hparams.batch_size].to(hparams.device)
-                     for k, v in input_ids.items()}
-            labels_batch = labels['input_ids'][batch_start: batch_start + hparams.batch_size].to(hparams.device)
-
-            outputs = model(**batch)
-
-            # 5. Objective-specific Loss Calculation
-            if hparams.objective_optimization == 'prompt_last':
-                loss = compute_prompt_last_loss(outputs, labels_batch)
-            elif hparams.objective_optimization == 'target_new':
-                loss = compute_target_new_loss(outputs, labels_batch)
-            else:
-                raise ValueError("Invalid optimization objective")
-
-            # 6. Update, Norm Constraint
-            loss.backward()
-            optimizer.step()
-            optimizer.zero_grad()
-
-            if hparams.norm_constraint:
-                # Apply norm constraint (implementation omitted for brevity)
-                ...
-
-            print(f"Step {step}, Loss: {loss.item()}")
-
-    # 7. Compute Deltas & Restore
-    deltas = calculate_deltas(model, target_weights, hparams)
-    restore_original_weights(model, target_weights, hparams)
-
-    return deltas
-
-
-# Helper Functions
-def compute_prompt_last_loss(outputs, labels):
-    logits = outputs.logits
-    last_token_logits = logits[:, -1, :]  # Extract logits for the last token
-    loss_fct = torch.nn.CrossEntropyLoss()  # Use cross-entropy loss
-    loss = loss_fct(last_token_logits, labels[:, -1])  # Compare with last token labels
-    return loss
-
-def compute_target_new_loss(outputs, labels):
-    logits = outputs.logits
-    shift_logits = logits[..., :-1, :].contiguous()
-    shift_labels = labels[..., 1:].contiguous()
-    loss_fct = torch.nn.CrossEntropyLoss()
-    loss = loss_fct(shift_logits.view(-1, shift_logits.size(-1)), shift_labels.view(-1))
-    return loss
-
-def calculate_deltas(model, target_weights, hparams):
-    deltas = {}
-    for layer_idx, original_weight in zip(hparams.layers, target_weights):
-        module_name = hparams.rewrite_module_tmp.format(layer_idx)
-        fine_tuned_weight = getattr(model, module_name).weight
-        deltas[module_name] = fine_tuned_weight - original_weight
-    return deltas
-
-def restore_original_weights(model, target_weights, hparams):
-    for layer_idx, original_weight in zip(hparams.layers, target_weights):
-        module_name = hparams.rewrite_module_tmp.format(layer_idx)
-        getattr(model, module_name).weight.data = original_weight.data
