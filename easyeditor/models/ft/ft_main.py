@@ -345,10 +345,14 @@ def bloom_ft(model, tokenizer, requests, hparams):
             elif hparams.objective_optimization == "target_new":
                 shifted_logits = logits[:, :-1, :].contiguous()
                 shifted_targets = batch_target_ids[:, 1:].contiguous()
+                batch_size, seq_length, vocab_size = shifted_logits.size()
+                shifted_logits = shifted_logits.view(-1, vocab_size)
+                shifted_targets = shifted_targets.view(-1)
                 loss_fct = nn.CrossEntropyLoss(reduction="none")
-                loss = loss_fct(shifted_logits.view(-1, shifted_logits.size(-1)), shifted_targets.view(-1))
-                loss = loss.view(shifted_targets.size())
-                loss = loss.masked_select(shifted_targets != tokenizer.pad_token_id).mean()
+                loss = loss_fct(shifted_logits, shifted_targets)
+                loss = loss.view(batch_size, seq_length)
+                loss = loss.masked_fill(shifted_targets.view(batch_size, seq_length) == tokenizer.pad_token_id, 0.0)
+                loss = loss.sum() / (shifted_targets != tokenizer.pad_token_id).sum()
             else:
                 raise ValueError(f"Invalid optimization objective: {hparams.objective_optimization}")
 
