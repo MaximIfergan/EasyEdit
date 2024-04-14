@@ -194,26 +194,21 @@ def execute_ft(
                 loss = loss.to(lm_logits.dtype)
             elif 'bloom' in hparams.model_name.lower():
                 if hparams.objective_optimization == 'prompt_last':
-                    seq_len = inputs["input_ids"].size(1)
-                    end_ind = seq_len  # Set end_ind to seq_len for BLOOM model
-                    logits = model(**inputs).logits
-                    probs = torch.nn.functional.log_softmax(logits[torch.arange(bs), end_ind - 1], dim=-1)
-                    loss = -(torch.gather(probs, 1, target_ids[:, -1].unsqueeze(-1)).squeeze() * loss_mask[:,-1]).mean()
+                    probs = torch.nn.functional.log_softmax(
+                        model(**inputs).logits[:, -1, :], dim=-1
+                    )
+                    loss = -(torch.gather(probs, 1, target_ids[:, -1].unsqueeze(-1)).squeeze(-1) * loss_mask[:,
+                                                                                                   -1]).sum(
+                        0
+                    ) / loss_mask[:, -1].sum()
                 elif hparams.objective_optimization == 'target_new':
-                    inputs_targets = [tgt_ + txt_ for txt_, tgt_ in zip(txt, tgt)]  # Swap the order of txt and tgt
-                    inputs_targets = tok(inputs_targets, return_tensors="pt", padding=True).to(device)
-                    num_target_toks = [int((i != tok.pad_token_id).sum()) for i in target_ids.cpu()]
-                    num_pad_toks = [int((i == tok.pad_token_id).sum()) for i in inputs_targets['input_ids'].cpu()]
-                    target_len = [x + y for x, y in zip(num_pad_toks, num_target_toks)]
-                    prompt_target_len = inputs_targets['input_ids'].size(1)
-                    label_mask = torch.tensor([[True] * length + [False] * (prompt_target_len - length) for length in target_len]).to(device)
                     logits = model(**inputs_targets).logits
                     shift_logits = logits[..., :-1, :].contiguous()
                     shift_labels = inputs_targets['input_ids'][..., 1:].contiguous()
                     loss_fct = CrossEntropyLoss(reduction='none')
                     loss = loss_fct(shift_logits.view(-1, shift_logits.size(-1)), shift_labels.view(-1))
                     loss = loss.view(bs, -1)
-                    loss = (loss * label_mask[:,1:]).sum(1) / label_mask[:,1:].sum(1)
+                    loss = (loss * label_mask[:, 1:]).sum(1) / label_mask[:, 1:].sum(1)
                     loss = loss.mean()
             else:
                 if hparams.objective_optimization == 'prompt_last':
