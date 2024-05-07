@@ -36,8 +36,8 @@ def apply_ft_to_model(
         model = deepcopy(model)
 
     if hasattr(model.config, 'model_type') and 'bloom' in model.config.model_type:
-        # deltas = bloom_ft(model, tok, requests, hparams)
-        deltas = execute_ft(model, tok, requests, hparams)
+        deltas = bloom_ft(model, tok, requests, hparams)
+        # deltas = execute_ft(model, tok, requests, hparams)
     else:
         deltas = execute_ft(model, tok, requests, hparams)
 
@@ -349,21 +349,33 @@ def bloom_ft(model, tokenizer, requests, hparams):
                 shifted_targets = batch_target_ids[:, 1:].contiguous()
                 batch_size, seq_length, vocab_size = shifted_logits.size()
 
-                # 214 the equivalent code:
+                print(f"shifted_logits shape: {shifted_logits.shape}")
+                print(f"shifted_targets shape: {shifted_targets.shape}")
+
                 # Flatten the shifted_targets tensor
                 shifted_targets = shifted_targets.view(-1)
+
+                print(f"flattened shifted_targets shape: {shifted_targets.shape}")
 
                 # Create a mask for valid target tokens
                 target_mask = (shifted_targets != tokenizer.pad_token_id).float()
 
+                print(f"target_mask shape: {target_mask.shape}")
+
                 # Apply the mask to the shifted_targets
                 masked_shifted_targets = shifted_targets * target_mask.long()
+
+                print(f"masked_shifted_targets shape: {masked_shifted_targets.shape}")
 
                 # Reshape the shifted_logits tensor
                 shifted_logits = shifted_logits.view(-1, vocab_size)
 
+                print(f"reshaped shifted_logits shape: {shifted_logits.shape}")
+
                 # Apply the mask to the shifted_logits
                 masked_shifted_logits = shifted_logits * target_mask.unsqueeze(-1)
+
+                print(f"masked_shifted_logits shape: {masked_shifted_logits.shape}")
 
                 # Calculate the loss only for valid target tokens
                 loss_fct = nn.CrossEntropyLoss(reduction="sum")
