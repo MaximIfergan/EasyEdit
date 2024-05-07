@@ -348,23 +348,26 @@ def bloom_ft(model, tokenizer, requests, hparams):
                 shifted_targets = batch_target_ids[:, 1:].contiguous()
                 batch_size, seq_length, vocab_size = shifted_logits.size()
 
-                # Flatten the shifted_logits and shifted_targets tensors
-                shifted_logits = shifted_logits.view(-1, vocab_size)
+                # Flatten the shifted_targets tensor
                 shifted_targets = shifted_targets.view(-1)
 
                 # Create a mask for valid target tokens
                 target_mask = (shifted_targets != tokenizer.pad_token_id).float()
 
-                # Apply the mask to the shifted_targets and flatten it
+                # Apply the mask to the shifted_targets
                 masked_shifted_targets = shifted_targets * target_mask.long()
-                masked_shifted_targets = masked_shifted_targets[target_mask.bool()]
 
-                # Apply the mask to the shifted_logits and reshape it
+                # Reshape the shifted_logits tensor
+                shifted_logits = shifted_logits.view(-1, vocab_size)
+
+                # Apply the mask to the shifted_logits
                 masked_shifted_logits = shifted_logits * target_mask.unsqueeze(-1)
-                masked_shifted_logits = masked_shifted_logits[target_mask.bool()]
 
-                loss_fct = nn.CrossEntropyLoss(reduction="mean")
+                # Calculate the loss only for valid target tokens
+                loss_fct = nn.CrossEntropyLoss(reduction="sum")
                 loss = loss_fct(masked_shifted_logits, masked_shifted_targets)
+                num_valid_targets = target_mask.sum()
+                loss = loss / num_valid_targets
             else:
                 raise ValueError(f"Invalid optimization objective: {hparams.objective_optimization}")
 
