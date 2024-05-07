@@ -350,6 +350,8 @@ def bloom_ft(model, tokenizer, requests, hparams):
                 shifted_logits = shifted_logits.view(-1, vocab_size)
                 shifted_targets = shifted_targets.view(-1)
                 loss_fct = nn.CrossEntropyLoss(reduction="none")
+                print(f"shifted_logits.size(): {shifted_logits.size()}")
+                print(f"shifted_targets.size(): {shifted_targets.size()}")
                 loss = loss_fct(shifted_logits, shifted_targets)
                 loss = loss.view(batch_size, seq_length)
                 loss = loss.masked_fill(shifted_targets.view(batch_size, seq_length) == tokenizer.pad_token_id, 0.0)
