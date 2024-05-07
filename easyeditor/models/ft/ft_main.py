@@ -366,38 +366,31 @@ def bloom_ft(model, tokenizer, requests, hparams):
                 shifted_targets = batch_target_ids[:, 1:].contiguous()
                 batch_size, seq_length, vocab_size = shifted_logits.size()
 
-                print(f"shifted_logits shape: {shifted_logits.shape}")
-                print(f"shifted_targets shape: {shifted_targets.shape}")
-
                 # Reshape the shifted_logits tensor
                 shifted_logits = shifted_logits.view(batch_size * seq_length, vocab_size)
 
                 # Flatten the shifted_targets tensor
                 shifted_targets = shifted_targets.view(-1)
 
-                print(f"reshaped shifted_logits shape: {shifted_logits.shape}")
-                print(f"flattened shifted_targets shape: {shifted_targets.shape}")
-
                 # Create a mask for valid target tokens
                 target_mask = (shifted_targets != tokenizer.pad_token_id).float()
 
-                print(f"target_mask shape: {target_mask.shape}")
+                # Reshape the target_mask to match the shape of shifted_logits
+                target_mask = target_mask.view(batch_size, seq_length).unsqueeze(-1)
+                target_mask = target_mask.expand(batch_size, seq_length, vocab_size).contiguous()
+                target_mask = target_mask.view(batch_size * seq_length, vocab_size)
 
                 # Apply the mask to the shifted_targets
-                masked_shifted_targets = shifted_targets * target_mask.long()
+                masked_shifted_targets = shifted_targets * target_mask.view(-1).long()
 
                 # Apply the mask to the shifted_logits
-                masked_shifted_logits = shifted_logits * target_mask.unsqueeze(-1)
-
-                print(f"masked_shifted_logits shape: {masked_shifted_logits.shape}")
-                print(f"masked_shifted_targets shape: {masked_shifted_targets.shape}")
+                masked_shifted_logits = shifted_logits * target_mask
 
                 # Calculate the loss only for valid target tokens
                 loss_fct = nn.CrossEntropyLoss(reduction="sum")
                 loss = loss_fct(masked_shifted_logits, masked_shifted_targets)
                 num_valid_targets = target_mask.sum()
                 loss = loss / num_valid_targets
-                print(f"target_new loss: {loss.item():.4f}")
             else:
                 raise ValueError(f"Invalid optimization objective: {hparams.objective_optimization}")
 
