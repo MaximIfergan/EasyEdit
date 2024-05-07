@@ -36,8 +36,8 @@ def apply_ft_to_model(
         model = deepcopy(model)
 
     if hasattr(model.config, 'model_type') and 'bloom' in model.config.model_type:
-        deltas = bloom_ft(model, tok, requests, hparams)
-        # deltas = execute_ft(model, tok, requests, hparams)
+        # deltas = bloom_ft(model, tok, requests, hparams)
+        deltas = execute_ft(model, tok, requests, hparams)
     else:
         deltas = execute_ft(model, tok, requests, hparams)
 
@@ -214,9 +214,13 @@ def execute_ft(
                     shift_labels = inputs_targets['input_ids'][..., 1:].contiguous()
                     loss_fct = CrossEntropyLoss(reduction='none')
                     loss = loss_fct(shift_logits.view(-1, shift_logits.size(-1)), shift_labels.view(-1))
+                    print(loss.item())
                     loss = loss.view(bs, -1)
+                    print(loss.item())
                     loss = (loss * label_mask[:,1:]).sum(1) / label_mask[:,1:].sum(1)
+                    print(loss.item())
                     loss = loss.mean()
+                    print(loss.item())
                 else:
                     raise NotImplementedError
             print(f"Batch loss {loss.item()}")
