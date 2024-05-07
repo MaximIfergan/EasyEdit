@@ -319,6 +319,9 @@ def bloom_ft(model, tokenizer, requests, hparams):
 
     # Fine-tuning loop
     for step in range(hparams.num_steps):
+        print(f"Step {step + 1}/{hparams.num_steps}")
+        print("=" * 20)
+
         # Shuffle the input data
         indices = torch.randperm(len(input_ids))
         input_ids = [input_ids[i] for i in indices]
@@ -327,27 +330,44 @@ def bloom_ft(model, tokenizer, requests, hparams):
 
         # Divide the input data into batches
         batch_indices = torch.arange(0, len(input_ids), hparams.batch_size)
-        for batch_start in batch_indices:
+        for batch_idx, batch_start in enumerate(batch_indices):
+            print(f"Batch {batch_idx + 1}/{len(batch_indices)}")
+            print("-" * 10)
+
             batch_end = min(batch_start + hparams.batch_size, len(input_ids))
-            batch_input_ids = nn.utils.rnn.pad_sequence(input_ids[batch_start:batch_end], batch_first=True, padding_value=tokenizer.pad_token_id).to(device)
-            batch_attention_mask = nn.utils.rnn.pad_sequence(attention_mask[batch_start:batch_end], batch_first=True, padding_value=0).to(device)
-            batch_target_ids = nn.utils.rnn.pad_sequence(target_ids[batch_start:batch_end], batch_first=True, padding_value=tokenizer.pad_token_id).to(device)
+            batch_input_ids = nn.utils.rnn.pad_sequence(input_ids[batch_start:batch_end], batch_first=True,
+                                                        padding_value=tokenizer.pad_token_id).to(device)
+            batch_attention_mask = nn.utils.rnn.pad_sequence(attention_mask[batch_start:batch_end], batch_first=True,
+                                                             padding_value=0).to(device)
+            batch_target_ids = nn.utils.rnn.pad_sequence(target_ids[batch_start:batch_end], batch_first=True,
+                                                         padding_value=tokenizer.pad_token_id).to(device)
+
+            print(f"batch_input_ids shape: {batch_input_ids.shape}")
+            print(f"batch_attention_mask shape: {batch_attention_mask.shape}")
+            print(f"batch_target_ids shape: {batch_target_ids.shape}")
 
             # Forward pass
             outputs = model(batch_input_ids, attention_mask=batch_attention_mask)
             logits = outputs.logits
 
+            print(f"logits shape: {logits.shape}")
+
             # Calculate the loss based on the optimization objective
             if hparams.objective_optimization == "prompt_last":
                 last_token_logits = logits[torch.arange(logits.size(0)), batch_attention_mask.sum(1) - 1, :]
                 last_token_probs = torch.softmax(last_token_logits, dim=-1)
-                last_token_target = batch_target_ids[torch.arange(batch_target_ids.size(0)), batch_attention_mask.sum(1) - 1]
+                last_token_target = batch_target_ids[
+                    torch.arange(batch_target_ids.size(0)), batch_attention_mask.sum(1) - 1]
                 loss = -torch.log(last_token_probs.gather(1, last_token_target.unsqueeze(1)))
                 loss = loss.masked_select(last_token_target != tokenizer.pad_token_id).sum()
+                print(f"prompt_last loss: {loss.item():.4f}")
             elif hparams.objective_optimization == "target_new":
                 shifted_logits = logits[:, :-1, :].contiguous()
                 shifted_targets = batch_target_ids[:, 1:].contiguous()
                 batch_size, seq_length, vocab_size = shifted_logits.size()
+
+                print(f"shifted_logits shape: {shifted_logits.shape}")
+                print(f"shifted_targets shape: {shifted_targets.shape}")
 
                 # Reshape the shifted_logits tensor
                 shifted_logits = shifted_logits.view(batch_size * seq_length, vocab_size)
@@ -355,8 +375,13 @@ def bloom_ft(model, tokenizer, requests, hparams):
                 # Flatten the shifted_targets tensor
                 shifted_targets = shifted_targets.view(-1)
 
+                print(f"reshaped shifted_logits shape: {shifted_logits.shape}")
+                print(f"flattened shifted_targets shape: {shifted_targets.shape}")
+
                 # Create a mask for valid target tokens
                 target_mask = (shifted_targets != tokenizer.pad_token_id).float()
+
+                print(f"target_mask shape: {target_mask.shape}")
 
                 # Apply the mask to the shifted_targets
                 masked_shifted_targets = shifted_targets * target_mask.long()
@@ -364,11 +389,15 @@ def bloom_ft(model, tokenizer, requests, hparams):
                 # Apply the mask to the shifted_logits
                 masked_shifted_logits = shifted_logits * target_mask.unsqueeze(-1)
 
+                print(f"masked_shifted_logits shape: {masked_shifted_logits.shape}")
+                print(f"masked_shifted_targets shape: {masked_shifted_targets.shape}")
+
                 # Calculate the loss only for valid target tokens
                 loss_fct = nn.CrossEntropyLoss(reduction="sum")
                 loss = loss_fct(masked_shifted_logits, masked_shifted_targets)
                 num_valid_targets = target_mask.sum()
                 loss = loss / num_valid_targets
+                print(f"target_new loss: {loss.item():.4f}")
             else:
                 raise ValueError(f"Invalid optimization objective: {hparams.objective_optimization}")
 
@@ -381,7 +410,6 @@ def bloom_ft(model, tokenizer, requests, hparams):
             if hparams.norm_constraint is not None:
                 torch.nn.utils.clip_grad_norm_(weights_to_finetune, hparams.norm_constraint)
 
-        # Print progress
         print(f"Step {step + 1}/{hparams.num_steps}, Loss: {loss.item():.4f}")
 
     # Compute the deltas
