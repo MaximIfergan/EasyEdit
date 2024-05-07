@@ -347,15 +347,24 @@ def bloom_ft(model, tokenizer, requests, hparams):
                 shifted_logits = logits[:, :-1, :].contiguous()
                 shifted_targets = batch_target_ids[:, 1:].contiguous()
                 batch_size, seq_length, vocab_size = shifted_logits.size()
+
+                # Flatten the shifted_logits and shifted_targets tensors
                 shifted_logits = shifted_logits.view(-1, vocab_size)
                 shifted_targets = shifted_targets.view(-1)
-                loss_fct = nn.CrossEntropyLoss(reduction="none")
-                print(f"shifted_logits.size(): {shifted_logits.size()}")
-                print(f"shifted_targets.size(): {shifted_targets.size()}")
-                loss = loss_fct(shifted_logits, shifted_targets)
-                loss = loss.view(batch_size, seq_length)
-                loss = loss.masked_fill(shifted_targets.view(batch_size, seq_length) == tokenizer.pad_token_id, 0.0)
-                loss = loss.sum() / (shifted_targets != tokenizer.pad_token_id).sum()
+
+                # Create a mask for valid target tokens
+                target_mask = (shifted_targets != tokenizer.pad_token_id).float()
+
+                # Apply the mask to the shifted_targets and flatten it
+                masked_shifted_targets = shifted_targets * target_mask.long()
+                masked_shifted_targets = masked_shifted_targets[target_mask.bool()]
+
+                # Apply the mask to the shifted_logits and reshape it
+                masked_shifted_logits = shifted_logits * target_mask.unsqueeze(-1)
+                masked_shifted_logits = masked_shifted_logits[target_mask.bool()]
+
+                loss_fct = nn.CrossEntropyLoss(reduction="mean")
+                loss = loss_fct(masked_shifted_logits, masked_shifted_targets)
             else:
                 raise ValueError(f"Invalid optimization objective: {hparams.objective_optimization}")
 
