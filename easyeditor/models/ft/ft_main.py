@@ -367,7 +367,7 @@ def bloom_ft(model, tokenizer, requests, hparams):
                 batch_size, seq_length, vocab_size = shifted_logits.size()
 
                 # Reshape the shifted_logits tensor
-                shifted_logits = shifted_logits.view(batch_size * seq_length, vocab_size)
+                shifted_logits = shifted_logits.view(-1, vocab_size)
 
                 # Flatten the shifted_targets tensor
                 shifted_targets = shifted_targets.view(-1)
@@ -375,16 +375,11 @@ def bloom_ft(model, tokenizer, requests, hparams):
                 # Create a mask for valid target tokens
                 target_mask = (shifted_targets != tokenizer.pad_token_id).float()
 
-                # Reshape the target_mask to match the shape of shifted_logits
-                target_mask = target_mask.view(batch_size, seq_length).unsqueeze(-1)
-                target_mask = target_mask.expand(batch_size, seq_length, vocab_size).contiguous()
-                target_mask = target_mask.view(batch_size * seq_length, vocab_size)
-
                 # Apply the mask to the shifted_targets
-                masked_shifted_targets = shifted_targets * target_mask.view(-1).long()
+                masked_shifted_targets = shifted_targets * target_mask.long()
 
                 # Apply the mask to the shifted_logits
-                masked_shifted_logits = shifted_logits * target_mask
+                masked_shifted_logits = shifted_logits * target_mask.unsqueeze(-1)
 
                 # Calculate the loss only for valid target tokens
                 loss_fct = nn.CrossEntropyLoss(reduction="sum")
