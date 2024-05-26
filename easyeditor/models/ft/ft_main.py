@@ -14,6 +14,7 @@ from .ft_hparams import FTHyperParams
 import torch
 import torch.nn as nn
 import torch.optim as optim
+import pickle
 
 def apply_ft_to_model(
     model: AutoModelForCausalLM,
@@ -35,11 +36,13 @@ def apply_ft_to_model(
     if copy:
         model = deepcopy(model)
 
-    if hasattr(model.config, 'model_type') and 'bloom' in model.config.model_type:
-        # deltas = bloom_ft(model, tok, requests, hparams)
-        deltas = execute_ft(model, tok, requests, hparams)
-    else:
-        deltas = execute_ft(model, tok, requests, hparams)
+    deltas = execute_ft(model, tok, requests, hparams)
+
+    # Save changes:
+    deltas_to_save = deepcopy(deltas)
+    outdir = f"edition_mats/{requests[0]['s_id']}_FT_{model.config.model_type}.pickle"
+    with open(outdir, 'wb') as handle:
+        pickle.dump(deltas_to_save, handle, protocol=pickle.HIGHEST_PROTOCOL)
 
     with torch.no_grad():
         for w_name, upd_matrix in deltas.items():
