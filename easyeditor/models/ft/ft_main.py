@@ -52,7 +52,7 @@ def apply_ft_to_model(
 
             w[...] += upd_matrix
 
-    print(f"New weights successfully inserted into {list(deltas.keys())}")
+    # print(f"New weights successfully inserted into {list(deltas.keys())}")
 
     if not keep_original_weight:
         weights_copy = {}
@@ -79,10 +79,10 @@ def execute_ft(
         if request["target_new"] != " ":
             # Space required for correct tokenization
             request["target_new"] = " " + request["target_new"]
-        print(
-            f"Executing FT algo for: "
-            f"[{request['prompt']}] -> [{request['target_new']}]"
-        )
+        # print(
+        #     f"Executing FT algo for: "
+        #     f"[{request['prompt']}] -> [{request['target_new']}]"
+        # )
     
     # Retrieve weights that user desires to change
     weights = {
@@ -94,7 +94,7 @@ def execute_ft(
     
     # Save old weights for future restoration
     weights_copy = {k: v.detach().clone() for k, v in weights.items()}
-    print(f"Weights to be updated: {list(weights.keys())}")
+    # print(f"Weights to be updated: {list(weights.keys())}")
 
     # Define inputs
     texts = [r["prompt"] for r in requests]
@@ -112,9 +112,9 @@ def execute_ft(
     # Update loop: intervene at layers simultaneously
     loss_meter = AverageMeter()
     for it in range(hparams.num_steps):
-        print(20 * "=")
-        print(f"Epoch: {it}")
-        print(20 * "=")
+        # print(20 * "=")
+        # print(f"Epoch: {it}")
+        # print(20 * "=")
         loss_meter.reset()
 
         for txt, tgt in zip(
@@ -222,14 +222,15 @@ def execute_ft(
                     loss = loss.mean()
                 else:
                     raise NotImplementedError
-            print(f"Batch loss {loss.item()}")
+            # print(f"Batch loss {loss.item()}")
             loss_meter.update(loss.item(), n=bs)
 
             if loss.item() >= 1e-2:
                 loss.backward()
                 opt.step()
             else:
-                print("Dont update")
+                # print("Dont update")
+                pass
 
             if type(hparams.norm_constraint) is float:
                 eps = hparams.norm_constraint
@@ -239,10 +240,10 @@ def execute_ft(
                             v, min=weights_copy[k] - eps, max=weights_copy[k] + eps
                         )
 
-        print(f"Total loss {loss_meter.avg}")
+        # print(f"Total loss {loss_meter.avg}")
 
         if loss_meter.avg < 1e-2:
-            print("Break FT")
+            # print("Break FT")
             break
 
     deltas = {k: (weights[k] - weights_copy[k]).detach() for k in weights}
@@ -252,7 +253,7 @@ def execute_ft(
         for k, v in weights.items():
             v[...] = weights_copy[k]
 
-    print(f"Deltas successfully computed for {list(weights.keys())}")
+    # print(f"Deltas successfully computed for {list(weights.keys())}")
 
     return deltas
 
