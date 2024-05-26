@@ -38,11 +38,11 @@ def apply_ft_to_model(
 
     deltas = execute_ft(model, tok, requests, hparams)
 
-    # Save changes:
-    deltas_to_save = deepcopy(deltas)
-    outdir = f"edition_mats/{requests[0]['s_id']}_FT_{model.config.model_type}.pickle"
-    with open(outdir, 'wb') as handle:
-        pickle.dump(deltas_to_save, handle, protocol=pickle.HIGHEST_PROTOCOL)
+    # # Save changes:
+    # deltas_to_save = deepcopy(deltas)
+    # outdir = f"edition_mats/{requests[0]['s_id']}_FT_{model.config.model_type}.pickle"
+    # with open(outdir, 'wb') as handle:
+    #     pickle.dump(deltas_to_save, handle, protocol=pickle.HIGHEST_PROTOCOL)
 
     with torch.no_grad():
         for w_name, upd_matrix in deltas.items():
