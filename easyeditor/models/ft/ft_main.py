@@ -214,13 +214,9 @@ def execute_ft(
                     shift_labels = inputs_targets['input_ids'][..., 1:].contiguous()
                     loss_fct = CrossEntropyLoss(reduction='none')
                     loss = loss_fct(shift_logits.view(-1, shift_logits.size(-1)), shift_labels.view(-1))
-                    print(loss)
                     loss = loss.view(bs, -1)
-                    print(loss)
                     loss = (loss * label_mask[:,1:]).sum(1) / label_mask[:,1:].sum(1)
-                    print(loss)
                     loss = loss.mean()
-                    print(loss)
                 else:
                     raise NotImplementedError
             print(f"Batch loss {loss.item()}")
