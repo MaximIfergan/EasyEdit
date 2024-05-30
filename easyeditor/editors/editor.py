@@ -24,14 +24,14 @@ from ..util.alg_dict import *
 
 logging.basicConfig(format = '%(asctime)s - %(levelname)s - %(name)s -   %(message)s',
                     datefmt = '%m/%d/%Y %H:%M:%S',
-                    level = logging.INFO)
+                    level = logging.ERROR)
 
 LOG = logging.getLogger(__name__)
 os.environ['CUDA_LAUNCH_BLOCKING'] = "1"
 
 def make_logs():
 
-    f_h, s_h = get_handler('logs', log_name='run.log')
+    f_h, s_h = get_handler('logs')
     LOG.addHandler(f_h)
     LOG.addHandler(s_h)
 
@@ -68,7 +68,7 @@ class BaseEditor:
         self.apply_algo = ALG_DICT[hparams.alg_name]
         self.alg_name = hparams.alg_name
 
-        make_logs()
+        # make_logs()
 
         # LOG.info("Instantiating model")
 
