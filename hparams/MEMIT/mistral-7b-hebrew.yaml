@@ -1,5 +1,5 @@
 alg_name: 'MEMIT'
-model_name: 'mistral-7b.yaml'
+model_name: 'yam-peleg/Hebrew-Mistral-7B'
 stats_dir: './data/stats'
 device: 0
 layers: [4, 5, 6, 7, 8]
