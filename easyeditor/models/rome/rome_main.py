@@ -7,7 +7,7 @@ from transformers import AutoModelForCausalLM, AutoTokenizer
 
 from ...util import nethook
 from ...util.generate import generate_fast
-
+import os
 from .compute_u import compute_u
 from .compute_v import compute_v
 from .rome_hparams import ROMEHyperParams
@@ -41,15 +41,29 @@ def apply_rome_to_model(
 
     weights_copy = {}
 
-    deltas = execute_rome(model, tok, request, hparams)
-
-    # Save changes:
-    deltas_to_save = deepcopy(deltas)
-    for w_name, (delta_u, delta_v) in deltas_to_save.items():
-        deltas_to_save[w_name] = (delta_u.cpu(), delta_v.cpu())
+    # Define the path for saved deltas
     outdir = f"edition_mats/{request['s_id']}_ROME_{model.config.model_type}.pickle"
-    with open(outdir, 'wb') as handle:
-        pickle.dump(deltas_to_save, handle, protocol=pickle.HIGHEST_PROTOCOL)
+
+    # Check if deltas are already saved
+    if os.path.exists(outdir):
+        print(f"Loading pre-saved deltas from {outdir}")
+        with open(outdir, 'rb') as handle:
+            deltas = pickle.load(handle)
+
+        # Move deltas back to GPU if necessary
+        for w_name, (delta_u, delta_v) in deltas.items():
+            deltas[w_name] = (delta_u.to(model.device), delta_v.to(model.device))
+    else:
+        print("Executing ROME algorithm to generate deltas")
+        deltas = execute_rome(model, tok, request, hparams)
+
+        # Save changes
+        deltas_to_save = deepcopy(deltas)
+        for w_name, (delta_u, delta_v) in deltas_to_save.items():
+            deltas_to_save[w_name] = (delta_u.cpu(), delta_v.cpu())
+
+        with open(outdir, 'wb') as handle:
+            pickle.dump(deltas_to_save, handle, protocol=pickle.HIGHEST_PROTOCOL)
 
     with torch.no_grad():
         for w_name, (delta_u, delta_v) in deltas.items():
