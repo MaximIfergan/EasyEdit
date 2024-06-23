@@ -49,15 +49,28 @@ def apply_memit_to_model(
     if copy:
         model = deepcopy(model)
 
-    deltas = execute_memit(model, tok, requests, hparams, cache_template=cache_template)
-
-    # Save changes:
-    deltas_to_save = deepcopy(deltas)
-    for w_name, (delta_u, delta_v) in deltas_to_save.items():
-        deltas_to_save[w_name] = (delta_u.cpu(), delta_v.cpu())
     outdir = f"edition_mats/{requests[0]['s_id']}_MEMIT_{model.config.model_type}.pickle"
-    with open(outdir, 'wb') as handle:
-        pickle.dump(deltas_to_save, handle, protocol=pickle.HIGHEST_PROTOCOL)
+
+    # Check if deltas are already saved
+    if os.path.exists(outdir):
+        print(f"Loading pre-saved deltas from {outdir}")
+        with open(outdir, 'rb') as handle:
+            deltas = pickle.load(handle)
+
+        # Move deltas back to GPU if necessary
+        for w_name, (delta_u, delta_v) in deltas.items():
+            deltas[w_name] = (delta_u.to(f"cuda:{hparams.device}"), delta_v.to(f"cuda:{hparams.device}"))
+    else:
+        print("Executing MEMIT algorithm to generate deltas")
+        deltas = execute_memit(model, tok, requests, hparams, cache_template=cache_template)
+
+        # Save changes
+        deltas_to_save = deepcopy(deltas)
+        for w_name, (delta_u, delta_v) in deltas_to_save.items():
+            deltas_to_save[w_name] = (delta_u.cpu(), delta_v.cpu())
+
+        with open(outdir, 'wb') as handle:
+            pickle.dump(deltas_to_save, handle, protocol=pickle.HIGHEST_PROTOCOL)
 
     with torch.no_grad():
         for w_name, (key_mat, val_mat) in deltas.items():
