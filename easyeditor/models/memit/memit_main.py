@@ -3,16 +3,13 @@ import pickle
 from copy import deepcopy
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
-
 import numpy as np
 import torch
 from transformers import AutoModelForCausalLM, AutoTokenizer
-
 from ..rome.layer_stats import layer_stats
 from ...util import nethook
 from ...util.generate import generate_fast
 from ...util.globals import *
-
 from .compute_ks import compute_ks
 from .compute_z import compute_z, get_module_input_output_at_words, find_fact_lookup_idx
 from .memit_hparams import MEMITHyperParams
