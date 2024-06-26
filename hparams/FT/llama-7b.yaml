@@ -6,13 +6,13 @@ alg_name: "FT"
 model_name: "meta-llama/Llama-2-7b-hf"
 device: 0
 layers: [4, 5, 6, 7, 8]
-num_steps: 25
+num_steps: 20
 batch_size: 1
 max_length: 40
-lr: 5e-4
+lr: 5e-3
 weight_decay: 0
 kl_factor: 0
-norm_constraint: false
+norm_constraint: 5e-5
 # In our survey paper(https://arxiv.org/abs/2401.01286) 
 # "prompt_last" corresponds to the results of FT-L.
 # "target_new" corresponds to the results of FT-M.
